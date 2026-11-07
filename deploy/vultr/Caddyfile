@@ -1,0 +1,11 @@
+# sslip.io maps this name to the server's IP, so Caddy can get an HTTPS
+# certificate before the project has its own domain. When the domain is
+# registered, add it to the first line, e.g. "patchrader.xyz, 155-138-...".
+155-138-145-151.sslip.io {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3000
+}
+
+http://155.138.145.151 {
+	redir https://155-138-145-151.sslip.io{uri}
+}

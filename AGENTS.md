@@ -72,7 +72,7 @@ Unless the prompter says otherwise, these are the sponsors this project uses. Wh
 | --- | --- | --- |
 | DEV Writing Challenge | Turn the Devpost write-up into a post about what we found | Write it near the end |
 | GoDaddy Registry | Register the project's domain | Decide on "Rader" vs "Radar" first |
-| Vultr | Host the dashboard, and possibly vLLM if GPU credits are available | Not started |
+| Vultr | Host the dashboard, and possibly vLLM if GPU credits are available | Dashboard live; see `deploy/vultr` |
 | Entire | Host the repo there | Not started |
 | Tiger Data | Store the 6.4M monthly EPSS rows | Loaded on Tiger Cloud |
 
