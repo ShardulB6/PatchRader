@@ -31,7 +31,7 @@ export function VisibilityBar({
             <div
               key={part.label}
               {...props}
-              className={`${props.className} h-7 min-w-0 rounded px-2 text-xs leading-7 font-semibold whitespace-nowrap text-white ${part.className}`}
+              className={`${props.className} h-7 min-w-0 overflow-hidden rounded text-center text-xs leading-7 font-semibold whitespace-nowrap text-white ${part.className}`}
               style={{ flex: `${part.count} 1 0` }}
             >
               {share * width > MIN_LABEL_WIDTH ? percent(share) : null}

@@ -150,16 +150,17 @@ export function StoryPage() {
             <Note>
               {visible} listings from {monthName(visibility.from)} to {monthName(visibility.to)}.
               Loud means public exploit code or an EPSS score of at least 10%, and quiet means
-              neither. For scale, {percent(visibility.unlistedLoudShareDec2024)} of all unlisted
-              vulnerabilities were loud in December 2024. The snapshots are monthly, so a
-              vulnerability published on the 1st and listed on the 28th counts as not yet published.
+              neither. For scale, {percent(visibility.unlistedLoudShareDec2024)} of unlisted
+              vulnerabilities in the December 2024 snapshot were loud. The snapshots are monthly, so
+              a vulnerability published on the 1st and listed on the 28th counts as not yet
+              published.
             </Note>
           }
         />
         <p className="mt-4 text-sm">
-          {percent(visibility.notPublished / visible)} had no signal history to read, so a ranking
-          can't rely on signals alone. It also has to read the description, the one field every new
-          vulnerability has.
+          For {percent(visibility.notPublished / visible)}, the last monthly snapshot before listing
+          came before publication, so a ranking built on monthly signals would have had nothing to
+          go on. The description is the one field every new vulnerability has from the start.
         </p>
       </Beat>
 
@@ -173,13 +174,13 @@ export function StoryPage() {
           caption={
             <Note>
               Median EPSS for {epss.cohort} vulnerabilities listed from {monthName(epss.from)} to{" "}
-              {monthName(epss.to)} and published at least 6 months earlier:{" "}
+              {monthName(epss.to)} and published before the six months shown began:{" "}
               {percent(before.median, 1)} the month before listing, {percent(during.median)} the
               month of it. This window avoids EPSS's March 2025 model change, which adds a false
               step to wider groups. Monthly data can't show whether the jump came just before or
               just after listing, and a listing date isn't when attacks began. Not every case looks
-              like this: the {epss.counterexample.cohort} listed in{" "}
-              {monthName(epss.counterexample.month)} stayed between{" "}
+              like this: for the {epss.counterexample.cohort} chosen the same way and listed in{" "}
+              {monthName(epss.counterexample.month)}, the median stayed between{" "}
               {percent(epss.counterexample.low)} and {percent(epss.counterexample.high)} throughout.
             </Note>
           }

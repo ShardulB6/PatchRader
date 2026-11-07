@@ -76,7 +76,9 @@ def main():
             month = month_index(row["month"])
             if row["cve_id"] in kev:
                 signals[row["cve_id"]][month] = (epss, code)
-            if month == dec_2024 and row["in_kev"] != "1":
+            # Count only real vulnerabilities published by then, not rejected or reserved IDs.
+            known = row["cve_id"] in vulns and vulns[row["cve_id"]][0] <= month_end(dec_2024)
+            if month == dec_2024 and known and row["in_kev"] != "1":
                 unlisted_dec_2024[0] += 1
                 unlisted_dec_2024[1] += code or (epss or 0) >= LOUD_EPSS
 
@@ -125,8 +127,8 @@ def main():
         else:
             states["quiet"] += 1
 
-    # Beat 4: median EPSS around the listing month, for vulnerabilities published at
-    # least 6 months before it. Listings from July to December 2024 keep months -6 to +2
+    # Beat 4: median EPSS around the listing month, for vulnerabilities published before
+    # month -6 began, so each has a score for every month shown. Listings from July to December 2024 keep months -6 to +2
     # inside one EPSS model; EPSS changed its model in March 2025.
     def epss_cohort(start, end):
         by_offset = defaultdict(list)
