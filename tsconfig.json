@@ -1,0 +1,3 @@
+{
+  "extends": "@PatchRader/config/tsconfig.base.json"
+}
