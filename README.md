@@ -36,6 +36,18 @@ python3 scripts/fetch_data.py
 
 This creates `data/` (about 850 MB), which git ignores. Column details are in `data/DATA_DICTIONARY.md`. The data comes from NIST NVD, CISA KEV, FIRST EPSS, cvss-bt and MITRE CWE.
 
+## Sponsors
+
+Unless otherwise stated, PatchRader uses these sponsors:
+
+| Sponsor               | How we use it                                                      | Status                             |
+| --------------------- | ------------------------------------------------------------------ | ---------------------------------- |
+| DEV Writing Challenge | Turn the Devpost write-up into a post about what we found          | Write it near the end              |
+| GoDaddy Registry      | Register the project's domain                                      | Decide on "Rader" vs "Radar" first |
+| Vultr                 | Host the dashboard, and possibly vLLM if GPU credits are available | Not started                        |
+| Entire                | Host the repo there                                                | Not started                        |
+| Tiger Data            | Store the 6.4M monthly EPSS rows                                   | Later, when Postgres comes back    |
+
 ## UI Customization
 
 React web apps in this stack share shadcn/ui primitives through `packages/ui`.
