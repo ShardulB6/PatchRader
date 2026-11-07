@@ -52,6 +52,8 @@ To rebuild the table, which replaces its contents, run this from `apps/web`. It 
 pnpm run db:load
 ```
 
+This script needs a Node version that runs TypeScript directly. It works on Node 26.13 and fails on 20.19 and 22.12.
+
 ## Sponsors
 
 Unless otherwise stated, PatchRader uses these sponsors:
