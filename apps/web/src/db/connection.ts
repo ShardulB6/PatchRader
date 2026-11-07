@@ -17,9 +17,18 @@ i21+5khjUHECIQCH1kzoKAKTnrkCuifWW9K0CzqXPLSjJBIh3jH2aaWZFQ==
 `;
 
 export function poolConfig(databaseUrl: string): PoolConfig {
-  // pg lets sslmode in the URL replace the ssl option, so remove it to keep the check below.
-  const url = new URL(databaseUrl);
-  url.searchParams.delete("sslmode");
+  let url: URL;
+  try {
+    url = new URL(databaseUrl);
+  } catch {
+    // The built-in error includes the whole URL, password and all.
+    throw new Error(
+      "DATABASE_URL is not a valid URL. Percent-encode special characters in the password.",
+    );
+  }
+  // pg lets ssl settings in the URL replace the ssl option, so remove them to keep the check below.
+  const sslParams = [...url.searchParams.keys()].filter((name) => name.startsWith("ssl"));
+  for (const name of sslParams) url.searchParams.delete(name);
   return {
     connectionString: url.toString(),
     ssl: { ca: TIGER_CLOUD_CA, rejectUnauthorized: true },
