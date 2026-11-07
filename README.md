@@ -26,6 +26,16 @@ pnpm run dev
 
 Open [http://localhost:3001](http://localhost:3001) in your browser to see the fullstack application.
 
+## Dataset
+
+The IBM track dataset is too large for git, so it lives in the [`data-v1` release](https://github.com/ShardulB6/PatchRader/releases/tag/data-v1). Download it once per checkout with Python 3 (use `python` on Windows):
+
+```bash
+python3 scripts/fetch_data.py
+```
+
+This creates `data/` (about 850 MB), which git ignores. Column details are in `data/DATA_DICTIONARY.md`. The data comes from NIST NVD, CISA KEV, FIRST EPSS, cvss-bt and MITRE CWE.
+
 ## UI Customization
 
 React web apps in this stack share shadcn/ui primitives through `packages/ui`.
