@@ -1,0 +1,34 @@
+{
+  "name": "PatchRader",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "vp run -r dev",
+    "build": "vp run -r build",
+    "check-types": "vp run -r check-types",
+    "check": "vp check && vp run -r check-types",
+    "lint": "vp lint",
+    "format": "vp fmt",
+    "staged": "vp staged",
+    "hooks:setup": "vp config",
+    "dev:web": "vp run --filter web dev",
+    "env:generate": "varlock codegen --path ./apps/web/",
+    "postinstall": "varlock codegen --path ./apps/web/"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@PatchRader/config": "workspace:*",
+    "@types/node": "^26.4.1",
+    "rolldown": "1.2.15",
+    "typescript": "catalog:",
+    "varlock": "catalog:",
+    "vite-plus": "1.4.0"
+  },
+  "packageManager": "pnpm@12.18.0"
+}
