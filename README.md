@@ -36,6 +36,22 @@ python3 scripts/fetch_data.py
 
 This creates `data/` (about 850 MB), which git ignores. Column details are in `data/DATA_DICTIONARY.md`. The data comes from NIST NVD, CISA KEV, FIRST EPSS, cvss-bt and MITRE CWE.
 
+## Database
+
+The dashboard reads from Postgres on Tiger Cloud. The `exploit_signals` table holds the monthly signals and the 2026 scoreboard values, with `source` telling them apart. The app builds and runs without a database until a page calls `getDb()`.
+
+To connect, put the connection string in `apps/web/.env.local`, which git ignores:
+
+```sh
+DATABASE_URL=postgres://USER:PASSWORD@HOST:PORT/tsdb?sslmode=require
+```
+
+To rebuild the table, which replaces its contents, run this from `apps/web`. It reads `data/` by default:
+
+```bash
+pnpm run db:load
+```
+
 ## Sponsors
 
 Unless otherwise stated, PatchRader uses these sponsors:
@@ -46,7 +62,7 @@ Unless otherwise stated, PatchRader uses these sponsors:
 | GoDaddy Registry      | Register the project's domain                                      | Decide on "Rader" vs "Radar" first |
 | Vultr                 | Host the dashboard, and possibly vLLM if GPU credits are available | Not started                        |
 | Entire                | Host the repo there                                                | Not started                        |
-| Tiger Data            | Store the 6.4M monthly EPSS rows                                   | Later, when Postgres comes back    |
+| Tiger Data            | Store the 6.4M monthly EPSS rows                                   | Loaded on Tiger Cloud              |
 
 ## UI Customization
 
