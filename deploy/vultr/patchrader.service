@@ -7,15 +7,35 @@ Wants=network-online.target
 Type=simple
 User=patchrader
 Group=patchrader
-WorkingDirectory=/srv/patchrader/app/apps/web
+# deploy.sh points current at the newest release folder before restarting.
+WorkingDirectory=/srv/patchrader/current/apps/web
 Environment=NODE_ENV=production
 # --static is resolved relative to the entry file, so ../client means dist/client.
 ExecStart=/usr/local/bin/srvx serve --prod --entry dist/server/server.js --static ../client --host 127.0.0.1 --port 3000
 Restart=always
 RestartSec=3
+MemoryMax=1G
+
+# The app only reads its files, so the whole filesystem is read-only to it.
 NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
 PrivateTmp=true
-ProtectSystem=full
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
 
 [Install]
 WantedBy=multi-user.target
