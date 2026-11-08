@@ -1,0 +1,45 @@
+[Unit]
+Description=PatchRader AI analyst API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=patchrader
+Group=patchrader
+# deploy.sh builds backend/.venv in each release before restarting.
+WorkingDirectory=/srv/patchrader/current/backend
+# watsonx.ai credentials and limits; root-only, not in git.
+EnvironmentFile=/etc/patchrader/api.env
+Environment=PATCHRADAR_DATA_DIR=/srv/patchrader/shared/data
+Environment=PYTHONDONTWRITEBYTECODE=1
+# python -m, because the venv is built in releases/.building and then moved,
+# which breaks the paths written into its scripts.
+ExecStart=/srv/patchrader/current/backend/.venv/bin/python -m uvicorn api:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=always
+RestartSec=3
+# The dataset takes about 1.6 GB in memory.
+MemoryMax=2200M
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=multi-user.target

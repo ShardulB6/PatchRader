@@ -9,17 +9,20 @@ REPO=https://github.com/ShardulB6/PatchRader.git
 BUILD=$BASE/releases/.building
 as_app() { sudo -u patchrader -H "$@"; }
 
-healthy() {
+check() {
 	i=0
-	while [ "$i" -lt 30 ]; do
-		code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:3000/story || true)
+	while [ "$i" -lt 60 ]; do
+		code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$1" || true)
 		[ "$code" = 200 ] && return 0
 		i=$((i + 1))
 		sleep 1
 	done
-	echo "/story returned ${code:-nothing} after 30 s" >&2
+	echo "$1 returned ${code:-nothing} after 60 s" >&2
 	return 1
 }
+# /ready loads the dataset, so it fails if the API can't read it.
+healthy() { check http://127.0.0.1:3000/story && check http://127.0.0.1:8000/ready; }
+restart() { systemctl restart patchrader patchrader-api; }
 
 exec 9>/run/patchrader-deploy.lock
 flock -n 9 || { echo "Another deploy is already running" >&2; exit 1; }
@@ -36,6 +39,14 @@ else
 	cd "$BUILD"
 	as_app env CI=true pnpm install --frozen-lockfile
 	as_app env NODE_ENV=production pnpm build
+	as_app python3 -m venv backend/.venv
+	as_app backend/.venv/bin/pip install -q --disable-pip-version-check -r backend/requirements-ai.txt
+	# The dataset is shared by every release. Download it once.
+	if [ ! -f "$BASE/shared/data/scoreboard_2026.csv" ]; then
+		as_app python3 scripts/fetch_data.py
+		rm -rf "$BASE/shared/data"
+		mv data "$BASE/shared/data"
+	fi
 	cd /
 	mv "$BUILD" "$new"
 fi
@@ -44,14 +55,14 @@ prev=""
 [ -L "$BASE/current" ] && prev=$(readlink -f "$BASE/current")
 ln -sfn "$new" "$BASE/current.next"
 mv -T "$BASE/current.next" "$BASE/current"
-systemctl restart patchrader
+restart
 
 if ! healthy; then
 	if [ -n "$prev" ] && [ "$prev" != "$new" ]; then
 		echo "Rolling back to $(basename "$prev")" >&2
 		ln -sfn "$prev" "$BASE/current.next"
 		mv -T "$BASE/current.next" "$BASE/current"
-		systemctl restart patchrader
+		restart
 		healthy && echo "Rollback is serving" >&2
 	fi
 	exit 1

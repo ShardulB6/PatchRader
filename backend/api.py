@@ -8,12 +8,15 @@ The DataStore is currently CSV-backed; Tiger Cloud migration is separate.
 import json
 import logging
 import os
+import time
+from collections import defaultdict, deque
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
@@ -45,6 +48,51 @@ app.add_middleware(
 
 # Only one thread should initialize the (potentially expensive) CSV store.
 _store_lock = Lock()
+
+
+# Each AI answer makes two watsonx.ai calls against a small Lite token
+# allowance, so the public endpoint limits each visitor and the whole day.
+# Past the daily cap, answers still work but skip watsonx.ai.
+CHAT_PER_MINUTE = int(os.getenv("CHAT_PER_MINUTE", "6"))
+WATSONX_DAILY_LIMIT = int(os.getenv("WATSONX_DAILY_LIMIT", "100"))
+_limit_lock = Lock()
+_recent = defaultdict(deque)
+_ai_day = {"date": None, "count": 0}
+
+
+def _client_ip(request: Request) -> str:
+    host = request.client.host if request.client else "unknown"
+    # Caddy replaces X-Forwarded-For with the real client address, so trust it
+    # only when the request came through the local proxy.
+    forwarded = request.headers.get("x-forwarded-for")
+    if host in ("127.0.0.1", "::1") and forwarded:
+        return forwarded.split(",")[-1].strip()
+    return host
+
+
+def _allow_request(ip: str) -> bool:
+    now = time.monotonic()
+    with _limit_lock:
+        for key in [k for k, times in _recent.items() if times[-1] < now - 60]:
+            del _recent[key]
+        times = _recent[ip]
+        while times and times[0] < now - 60:
+            times.popleft()
+        if len(times) >= CHAT_PER_MINUTE:
+            return False
+        times.append(now)
+        return True
+
+
+def _take_ai_quota() -> bool:
+    today = datetime.now(timezone.utc).date()
+    with _limit_lock:
+        if _ai_day["date"] != today:
+            _ai_day.update(date=today, count=0)
+        if _ai_day["count"] >= WATSONX_DAILY_LIMIT:
+            return False
+        _ai_day["count"] += 1
+        return True
 
 
 @lru_cache(maxsize=1)
@@ -90,10 +138,12 @@ def ready():
 
 
 @app.post("/api/chat")
-def chat(request: ChatRequest):
+def chat(request: ChatRequest, http_request: Request):
+    if not _allow_request(_client_ip(http_request)):
+        raise HTTPException(status_code=429, detail="Too many questions; wait a minute")
     try:
         store = get_store()
-        use_ai = watsonx_enabled()
+        use_ai = watsonx_enabled() and _take_ai_quota()
         plan, mode = classify(request.message, use_ai=use_ai)
         table, note = execute_plan(store, plan)
         answer = grounded_answer(request.message, table, note, use_ai)

@@ -3,7 +3,13 @@
 # registered, add it to the first line, e.g. "patchrader.xyz, 155-138-...".
 155-138-145-151.sslip.io {
 	encode zstd gzip
-	reverse_proxy 127.0.0.1:3000
+	# The AI analyst API. Only /api/* is exposed; FastAPI's docs pages are not.
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
 }
 
 http://155.138.145.151 {
