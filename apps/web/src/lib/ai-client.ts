@@ -62,6 +62,7 @@ export type ImpactRow = {
   vendors: string[];
   contexts: string[];
   in_kev: boolean;
+  exploit_code: boolean;
   ransomware_use: boolean;
   n_references: number;
   ref_domains: string[];
@@ -76,13 +77,15 @@ export type Top500Impact = {
   requested: number;
   matched: number;
   missing: string[];
+  kev_through: string | null;
   rows: ImpactRow[];
   summary: {
     headline: string;
     kev: number;
     easy: number;
-    ransomware: number;
-    broad: number;
+    exploit_code: number;
+    critical_high: number;
+    no_products: number;
     harm: Count[];
     severity: Count[];
     footprint: Count[];

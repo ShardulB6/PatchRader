@@ -23,6 +23,11 @@ HARM_DICT = [
     ("deserialization", "system_takeover", "crafted data can trigger code execution"),
     ("authentication", "unauthorized_access", "services can be accessed without legitimate credentials"),
     ("authorization", "unauthorized_access", "users can reach data or functions they should not"),
+    ("access control", "unauthorized_access", "users can reach data or functions they should not"),
+    ("privilege management", "privilege_escalation", "a low-privileged user can gain administrator-level control"),
+    ("upload of file", "system_takeover", "a malicious file can be uploaded and may then be run"),
+    ("server-side request forgery", "internal_network_access", "the server can be abused to reach internal systems"),
+    ("file name or path", "data_breach", "files outside the intended folder can be read or overwritten"),
     ("credential", "credential_theft", "passwords or keys may be exposed, enabling follow-on attacks"),
     ("cross-site scripting", "user_compromise", "visitors can be attacked through a trusted site"),
     ("cookie", "session_hijack", "user sessions may be stolen or tampered with"),
@@ -240,7 +245,7 @@ def build_impact(store, cve_ids):
             parts.append("Confirmed exploited in the wild (CISA KEV)"
                          + (", including by ransomware operators." if ransomware else "."))
         elif int(r["exploit_signals"] or 0) > 0:
-            parts.append("Public exploit code or scanners exist, but it is not listed in KEV.")
+            parts.append("Public exploit code or scanners exist.")
         if ref and ref["n_exploit_refs"]:
             parts.append(f"{int(ref['n_exploit_refs'])} reference(s) point to code or write-ups hosting technical detail.")
         if not parts:
@@ -251,7 +256,7 @@ def build_impact(store, cve_ids):
             "weaknesses": names, "harm_categories": sorted(harms), "exploit_ease": ease,
             "footprint": _footprint(n_products, n_cpes), "n_products": n_products,
             "n_affected_cpes": n_cpes, "vendors": vendors[:10], "contexts": contexts,
-            "in_kev": bool(k), "ransomware_use": ransomware,
+            "in_kev": bool(k), "ransomware_use": ransomware, "exploit_code": int(r["exploit_signals"] or 0) > 0,
             "n_references": int(ref["n_refs"]) if ref else int(_f(r["n_references"]) or 0),
             "ref_domains": sorted(d for d in (list(ref["domains"]) if ref else []) if d)[:5],
             "description": desc, "narrative": " ".join(parts),
@@ -268,20 +273,23 @@ def summarize(rows, requested):
     n = len(rows)
     if n == 0:
         return {"headline": "None of the CVEs in top500.csv matched vulnerabilities.csv.",
-                "kev": 0, "easy": 0, "ransomware": 0, "broad": 0,
+                "kev": 0, "easy": 0, "exploit_code": 0, "critical_high": 0, "no_products": 0,
                 "harm": [], "severity": [], "footprint": [], "vendors": [], "contexts": [], "weaknesses": []}
     harm = Counter(h for r in rows for h in r["harm_categories"])
     kev = sum(r["in_kev"] for r in rows)
     easy = sum(r["exploit_ease"] == "easy" for r in rows)
-    ransom = sum(r["ransomware_use"] for r in rows)
-    broad = sum(r["footprint"] in ("broad", "very broad") for r in rows)
+    exploit_code = sum(r["exploit_code"] for r in rows)
+    critical_high = sum(r["severity"] in ("CRITICAL", "HIGH") for r in rows)
+    no_products = sum(r["footprint"] == "unknown" for r in rows)
     top_harm = harm.most_common(1)
-    headline = (f"{n} of {requested} CVEs matched dataset records. {kev} are confirmed exploited (CISA KEV), "
-                f"{easy} can be attacked remotely with no login or user action, and {broad} affect a broad range of products"
-                + (f". The most common potential consequence is {top_harm[0][0].replace('_', ' ')} ({top_harm[0][1]} CVEs)."
-                   if top_harm else "."))
+    headline = (f"{n} of {requested} CVEs matched dataset records. {exploit_code} have public exploit code and "
+                f"{easy} can be attacked remotely with no login or user action."
+                + (f" Confirmed exploited (CISA KEV): {kev}." if kev else "")
+                + (f" The most common potential consequence is {top_harm[0][0].replace('_', ' ')} ({top_harm[0][1]} CVEs)."
+                   if top_harm else ""))
     return {
-        "headline": headline, "kev": kev, "easy": easy, "ransomware": ransom, "broad": broad,
+        "headline": headline, "kev": kev, "easy": easy, "exploit_code": exploit_code,
+        "critical_high": critical_high, "no_products": no_products,
         # Not capped: this list also fills the page's consequence filter.
         "harm": _counts(harm, None), "severity": _counts(Counter(r["severity"] for r in rows)),
         "footprint": _counts(Counter(r["footprint"] for r in rows)),
@@ -300,8 +308,9 @@ def top500_impact(store, path):
     ids = ids[:1000]
     rows = build_impact(store, ids)
     found = {r["cve_id"] for r in rows}
+    kev_through = store.query("SELECT max(date_added) AS last_added FROM known_exploited")["last_added"].iloc[0]
     return clean({
         "source": Path(path).name, "requested": len(ids), "matched": len(rows),
-        "missing": [i for i in ids if i not in found][:50],
+        "missing": [i for i in ids if i not in found][:50], "kev_through": _s(kev_through) or None,
         "summary": summarize(rows, len(ids)), "rows": rows,
     })

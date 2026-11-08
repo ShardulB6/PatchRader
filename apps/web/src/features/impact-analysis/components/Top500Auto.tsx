@@ -86,10 +86,10 @@ export default function Top500Auto() {
 
   const s = data.summary;
   const tiles: [string, number][] = [
-    ["Confirmed exploited (KEV)", s.kev],
+    ["Public exploit code", s.exploit_code],
     ["Remote, no login or click", s.easy],
-    ["Ransomware-linked", s.ransomware],
-    ["Broad footprint", s.broad],
+    ["Critical or high severity", s.critical_high],
+    ["No product data yet", s.no_products],
   ];
 
   return (
@@ -103,6 +103,12 @@ export default function Top500Auto() {
           <p className="mt-1 text-xs text-muted-foreground">
             {data.requested - data.matched} ID(s) were not found in vulnerabilities.csv, e.g.{" "}
             {data.missing.slice(0, 3).join(", ")}.
+          </p>
+        )}
+        {s.kev === 0 && data.kev_through && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            The CISA KEV list in this dataset ends on {data.kev_through}, so it can't show whether
+            these CVEs have been exploited since.
           </p>
         )}
       </div>
@@ -146,11 +152,13 @@ export default function Top500Auto() {
           <table className="w-full border-collapse text-left text-xs">
             <thead>
               <tr>
-                {["CVE", "Severity", "Ease", "Footprint", "KEV", "Consequences"].map((h) => (
-                  <th key={h} className="border-b px-2 py-1">
-                    {h}
-                  </th>
-                ))}
+                {["CVE", "Severity", "Ease", "Footprint", "Exploit code", "Consequences"].map(
+                  (h) => (
+                    <th key={h} className="border-b px-2 py-1">
+                      {h}
+                    </th>
+                  ),
+                )}
               </tr>
             </thead>
             <tbody>
@@ -167,7 +175,7 @@ export default function Top500Auto() {
                     </td>
                     <td className="border-b px-2 py-1">{r.exploit_ease}</td>
                     <td className="border-b px-2 py-1">{r.footprint}</td>
-                    <td className="border-b px-2 py-1">{r.in_kev ? "Yes" : "No"}</td>
+                    <td className="border-b px-2 py-1">{r.exploit_code ? "Yes" : "No"}</td>
                     <td className="border-b px-2 py-1">
                       {r.harm_categories.map(pretty).join(", ") || "—"}
                     </td>
