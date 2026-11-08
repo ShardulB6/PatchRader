@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 export default function Header() {
   const links = [
     { to: "/story", label: "Story" },
+    { to: "/documentation", label: "Documentation" },
     { to: "/ai", label: "AI Analyst" },
     { to: "/impact", label: "Impact" },
   ] as const;
@@ -10,7 +11,7 @@ export default function Header() {
   return (
     <div>
       <div className="flex flex-row items-center justify-between px-2 py-1">
-        <nav className="flex gap-4 text-lg" aria-label="Main navigation">
+        <nav className="flex flex-wrap gap-x-4 text-lg" aria-label="Main navigation">
           {links.map(({ to, label }) => (
             <Link key={to} to={to} activeProps={{ className: "font-semibold underline" }}>
               {label}
