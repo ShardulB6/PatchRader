@@ -53,10 +53,10 @@ def _model_client():
         from ibm_watsonx_ai import Credentials
         from ibm_watsonx_ai.foundation_models import ModelInference
         _model = ModelInference(
-            model_id=os.getenv('WATSONX_MODEL_ID', 'ibm/granite-4-h-small'),
+            model_id=os.getenv('WATSONX_MODEL_ID', 'meta-llama/llama-3-3-70b-instruct'),
             credentials=Credentials(
                 api_key=os.environ['WATSONX_API_KEY'],
-                url=os.getenv('WATSONX_URL', 'https://us-south.ml.cloud.ibm.com'),
+                url=os.getenv('WATSONX_URL', 'https://ca-tor.ml.cloud.ibm.com'),
             ),
             project_id=os.environ['WATSONX_PROJECT_ID'],
         )
@@ -162,10 +162,10 @@ def classify(question, use_ai=False):
         if start < 0 or end < start:
             raise ValueError('No JSON object')
         plan = _validated_plan(json.loads(raw[start:end + 1]), question)
-        return plan, 'IBM watsonx Granite'
+        return plan, 'IBM watsonx.ai'
     except Exception:
-        log.exception('Granite classification failed; using local router')
-        return fallback, 'Local router (Granite unavailable)'
+        log.exception('watsonx.ai classification failed; using local router')
+        return fallback, 'Local router (watsonx.ai unavailable)'
 
 
 def execute_plan(store, plan):
@@ -213,5 +213,5 @@ def grounded_answer(question, frame, note, use_ai=False):
                       f'First 15 rows (CSV):\n{sample}')
             return model_chat(system, prompt, 350)
         except Exception:
-            log.exception('Granite explanation failed; using deterministic answer')
+            log.exception('watsonx.ai explanation failed; using deterministic answer')
     return f'{note}\n\nLeading result: {first_text}. Returned {len(frame):,} row(s).'
