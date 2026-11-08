@@ -5,6 +5,7 @@ Tiger Cloud; production migration requires the actual database schema.
 """
 from pathlib import Path
 import os
+import tempfile
 
 import duckdb
 import pandas as pd
@@ -47,6 +48,9 @@ class DataStore:
 
         self.con = duckdb.connect(":memory:")
         self.con.execute("SET memory_limit='2GB'")
+        # The default temp folder is inside the working directory, which the
+        # server's sandbox makes read-only. /tmp is private and writable.
+        self.con.execute("SET temp_directory=?", [str(Path(tempfile.gettempdir()) / "duckdb")])
         self.con.execute("SET threads=4")
         self.tables = []
 

@@ -13,6 +13,8 @@ WorkingDirectory=/srv/patchrader/current/backend
 EnvironmentFile=/etc/patchrader/api.env
 Environment=PATCHRADAR_DATA_DIR=/srv/patchrader/shared/data
 Environment=PYTHONDONTWRITEBYTECODE=1
+# /var/lib/patchrader-api keeps the daily watsonx.ai count across restarts.
+StateDirectory=patchrader-api
 # python -m, because the venv is built in releases/.building and then moved,
 # which breaks the paths written into its scripts.
 ExecStart=/srv/patchrader/current/backend/.venv/bin/python -m uvicorn api:app --host 127.0.0.1 --port 8000 --workers 1

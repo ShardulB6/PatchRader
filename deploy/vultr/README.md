@@ -23,6 +23,17 @@ The API allows each visitor `CHAT_PER_MINUTE` questions a minute (default 6). It
 
 ## Update the live site
 
+The server runs its own copy of `deploy.sh`, `Caddyfile` and the unit files. When a PR changes any of them, install the new copies before deploying:
+
+```sh
+scp deploy/vultr/deploy.sh root@155.138.145.151:/usr/local/bin/patchrader-deploy
+scp deploy/vultr/*.service root@155.138.145.151:/etc/systemd/system/
+scp deploy/vultr/Caddyfile root@155.138.145.151:/etc/caddy/Caddyfile
+ssh root@155.138.145.151 'systemctl daemon-reload && systemctl enable patchrader-api && patchrader-deploy && systemctl reload caddy'
+```
+
+Otherwise:
+
 After a PR merges into `main`:
 
 ```sh
@@ -35,7 +46,7 @@ To go back to an earlier release by hand:
 
 ```sh
 ls -t /srv/patchrader/releases
-ln -sfn /srv/patchrader/releases/<commit> /srv/patchrader/current && systemctl restart patchrader
+ln -sfn /srv/patchrader/releases/<commit> /srv/patchrader/current && systemctl restart patchrader patchrader-api
 ```
 
 ## Database

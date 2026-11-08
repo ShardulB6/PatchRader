@@ -20,9 +20,23 @@ check() {
 	echo "$1 returned ${code:-nothing} after 60 s" >&2
 	return 1
 }
+# Releases from before the API existed have no backend/, so only check and
+# run the API when the served release has one.
+has_api() { [ -d "$BASE/current/backend" ]; }
 # /ready loads the dataset, so it fails if the API can't read it.
-healthy() { check http://127.0.0.1:3000/story && check http://127.0.0.1:8000/ready; }
-restart() { systemctl restart patchrader patchrader-api; }
+healthy() {
+	check http://127.0.0.1:3000/story || return 1
+	has_api || return 0
+	check http://127.0.0.1:8000/ready
+}
+restart() {
+	if has_api; then
+		systemctl restart patchrader patchrader-api
+	else
+		systemctl restart patchrader
+		systemctl stop patchrader-api
+	fi
+}
 
 exec 9>/run/patchrader-deploy.lock
 flock -n 9 || { echo "Another deploy is already running" >&2; exit 1; }
@@ -32,7 +46,8 @@ as_app git clone -q --depth 1 "$REPO" "$BUILD"
 sha=$(as_app git -C "$BUILD" rev-parse --short=12 HEAD)
 new=$BASE/releases/$sha
 
-if [ -d "$new" ]; then
+# Reuse a release only if it was fully built, including the API's venv.
+if [ -x "$new/backend/.venv/bin/python" ]; then
 	rm -rf "$BUILD"
 else
 	as_app ln -s "$BASE/shared/.env.local" "$BUILD/apps/web/.env.local"
@@ -48,6 +63,9 @@ else
 		mv data "$BASE/shared/data"
 	fi
 	cd /
+	# An incomplete build of this commit may be the one being served, so move
+	# it aside rather than deleting it under the running app.
+	[ -d "$new" ] && mv "$new" "$BASE/releases/.incomplete-$sha-$$"
 	mv "$BUILD" "$new"
 fi
 
@@ -68,6 +86,7 @@ if ! healthy; then
 	exit 1
 fi
 
+rm -rf "$BASE"/releases/.incomplete-*
 # Keep the three newest releases, never the one being served or the previous one.
 ls -1dt "$BASE"/releases/*/ | tail -n +4 | while read -r dir; do
 	dir=${dir%/}

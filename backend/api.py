@@ -53,11 +53,24 @@ _store_lock = Lock()
 # Each AI answer makes two watsonx.ai calls against a small Lite token
 # allowance, so the public endpoint limits each visitor and the whole day.
 # Past the daily cap, answers still work but skip watsonx.ai.
-CHAT_PER_MINUTE = int(os.getenv("CHAT_PER_MINUTE", "6"))
+CHAT_PER_MINUTE = max(1, int(os.getenv("CHAT_PER_MINUTE", "6")))
 WATSONX_DAILY_LIMIT = int(os.getenv("WATSONX_DAILY_LIMIT", "100"))
 _limit_lock = Lock()
 _recent = defaultdict(deque)
-_ai_day = {"date": None, "count": 0}
+# systemd sets STATE_DIRECTORY, so the daily count survives restarts and deploys.
+_state_dir = os.getenv("STATE_DIRECTORY")
+_AI_COUNT_FILE = Path(_state_dir) / "watsonx_daily.json" if _state_dir else None
+
+
+def _load_ai_day():
+    try:
+        saved = json.loads(_AI_COUNT_FILE.read_text())
+        return {"date": saved["date"], "count": int(saved["count"])}
+    except Exception:
+        return {"date": None, "count": 0}
+
+
+_ai_day = _load_ai_day() if _AI_COUNT_FILE else {"date": None, "count": 0}
 
 
 def _client_ip(request: Request) -> str:
@@ -85,13 +98,18 @@ def _allow_request(ip: str) -> bool:
 
 
 def _take_ai_quota() -> bool:
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(timezone.utc).date().isoformat()
     with _limit_lock:
         if _ai_day["date"] != today:
             _ai_day.update(date=today, count=0)
         if _ai_day["count"] >= WATSONX_DAILY_LIMIT:
             return False
         _ai_day["count"] += 1
+        if _AI_COUNT_FILE:
+            try:
+                _AI_COUNT_FILE.write_text(json.dumps(_ai_day))
+            except OSError:
+                logger.exception("Could not save the watsonx.ai daily count")
         return True
 
 
