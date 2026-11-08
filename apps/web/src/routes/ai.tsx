@@ -1,19 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "@PatchRader/ui/components/button";
 import { useState, type FormEvent } from "react";
-import { AnswerChart } from "../features/ai/answer-chart";
-import { askAnalyst, type ChatRow } from "../lib/ai-client";
+import { AnswerView, type AnswerMessage } from "../features/ai/answer-cards/answer-view";
+import { askAnalyst } from "../lib/ai-client";
 
 export const Route = createFileRoute("/ai")({ component: AnalystPage });
 
-type Message = {
-  role: "user" | "assistant";
-  content: string;
-  rows?: ChatRow[];
-  note?: string;
-  mode?: string;
-  operation?: string;
-};
+type Message = { role: "user" | "assistant" } & AnswerMessage;
 
 const EXAMPLES = [
   "What should I patch first if I use Fortinet and Cisco?",
@@ -50,6 +43,8 @@ function AnalystPage() {
           note: result.note,
           mode: result.mode,
           operation: result.operation,
+          summary: result.summary,
+          cves: result.cves,
         },
       ]);
     } catch (error) {
@@ -90,29 +85,10 @@ function AnalystPage() {
         )}
         {messages.map((message, i) => (
           <article key={i} className={`max-w-full rounded-lg p-3 text-sm ${message.role === "user" ? "ml-auto w-fit bg-primary text-primary-foreground" : "border bg-card"}`}>
-            <p className="whitespace-pre-wrap">{message.content}</p>
-            {message.operation && message.rows && (
-              <AnswerChart operation={message.operation} rows={message.rows} />
-            )}
-            {message.rows && message.rows.length > 0 && (
-              // Long tables start collapsed so they don't push the conversation away.
-              <details open={message.rows.length <= 12} className="mt-3 max-w-full overflow-x-auto">
-                <summary className="cursor-pointer text-xs text-muted-foreground select-none">
-                  Data table ({message.rows.length} rows)
-                </summary>
-                <table className="w-full border-collapse text-left text-xs">
-                  <thead><tr>{Object.keys(message.rows[0]).map((key) => <th key={key} className="border-b px-2 py-1">{key}</th>)}</tr></thead>
-                  <tbody>{message.rows.map((row, rowIndex) => <tr key={rowIndex}>{Object.entries(row).map(([key, value]) => <td key={key} className="border-b px-2 py-1">{String(value ?? "")}</td>)}</tr>)}</tbody>
-                </table>
-              </details>
-            )}
-            {message.note && <p className="mt-2 text-xs text-muted-foreground">{message.note}</p>}
-            {message.mode && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {message.mode === "IBM watsonx.ai"
-                  ? "Answered by IBM watsonx.ai"
-                  : "Answered without AI by the keyword router (watsonx.ai not used)"}
-              </p>
+            {message.role === "user" ? (
+              <p className="whitespace-pre-wrap">{message.content}</p>
+            ) : (
+              <AnswerView message={message} />
             )}
           </article>
         ))}
