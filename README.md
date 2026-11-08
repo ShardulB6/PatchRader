@@ -1,5 +1,7 @@
 # PatchRader
 
+> **This was a hackathon project**, built for the IBM "Before the Breach" track at Sheridan Datathon 2026 (November 7–8, 2026).
+
 This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines React, TanStack Start, Self, and more.
 
 ## Features
