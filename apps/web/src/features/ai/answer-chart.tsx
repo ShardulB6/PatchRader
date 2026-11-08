@@ -1,7 +1,7 @@
 import { useRef } from "react";
 
-import type { ChatRow } from "@/lib/ai-client";
-import { count, useChartTooltip, useElementWidth } from "@/features/story/chart-kit";
+import type { ChatRow } from "../../lib/ai-client";
+import { count, useChartTooltip, useElementWidth } from "../story/chart-kit";
 
 type Point = { label: string; value: number; detail: string };
 type Spec = {
@@ -66,7 +66,8 @@ export function AnswerChart({ operation, rows }: { operation: string; rows: Chat
   if (!spec || rows.length < 2) return null;
   const points: Point[] = rows
     .map((row) => {
-      const value = Number(row[spec.value]);
+      const raw = row[spec.value];
+      const value = raw === null || raw === "" ? Number.NaN : Number(raw);
       const label = spec.label(row);
       const name = operation === "top_cwes" && row.weakness ? `${label} ${row.weakness}` : label;
       return { label, value, detail: `${name}: ${spec.format(value)}` };
@@ -100,7 +101,7 @@ function Bars({ points, format }: { points: Point[]; format: (value: number) => 
           width={width}
           height={height}
           className="block"
-          role="img"
+          role="group"
           aria-label="Bar chart of the results"
         >
           {points.map((point, index) => {
@@ -154,7 +155,7 @@ function Columns({ points, format }: { points: Point[]; format: (value: number) 
           width={width}
           height={PLOT + AXIS}
           className="block"
-          role="img"
+          role="group"
           aria-label="Column chart of the results"
         >
           <line x1={0} x2={width} y1={PLOT} y2={PLOT} className="stroke-border" />

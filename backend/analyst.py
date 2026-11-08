@@ -56,12 +56,27 @@ def set_vendor_names(names):
     _vendor_names = set(names)
 
 
+# Vendor names that are also everyday words. They only count when capitalized,
+# so "what's the progress on patching" doesn't mean Progress Software.
+CAPITALIZED_ONLY = {
+    'checkbox', 'code projects', 'color', 'eclipse', 'elastic', 'git', 'horde', 'looking glass', 'mambo',
+    'meta', 'nice', 'north grid', 'octopus', 'opera', 'parallels', 'pear', 'plex', 'progress', 'puppet',
+    'python', 'quest', 'rails', 'sick', 'sudo', 'versa', 'zoom',
+}
+
+
+def _capitalized_in(name, question):
+    pattern = r'\b' + r'[\s_-]+'.join(re.escape(word) for word in name.split()) + r'\b'
+    return any(m.group(0)[0].isupper() for m in re.finditer(pattern, question, re.I))
+
+
 def find_vendors(question):
     """Known vendor names that appear in the question as whole words.
     Taken from the question itself, never from the model."""
     # Keep dots inside names like 'node.js', but not at the end of a sentence.
     q = ' ' + re.sub(r'[^a-z0-9.]+|\.(?![a-z0-9])', ' ', question.lower()) + ' '
-    found = [name for name in _vendor_names if f' {name} ' in q]
+    found = [name for name in _vendor_names if f' {name} ' in q
+             and (name not in CAPITALIZED_ONLY or _capitalized_in(name, question))]
     # Drop names inside a longer match, e.g. 'palo alto' within 'palo alto networks'.
     return sorted(n for n in found if not any(n != m and f' {n} ' in f' {m} ' for m in found))
 
@@ -156,6 +171,8 @@ def _validated_plan(candidate, question):
     fallback = local_route(question)
     tool = candidate['tool']
     supplied = {c.upper() for c in CVE_RE.findall(question)}
+    if tool == 'compare_cves' and len(supplied) < 2:
+        return fallback
     requested = str(candidate.get('cve_id') or '')
     match = CVE_RE.search(requested)
     cve_id = match.group(0).upper() if match and match.group(0).upper() in supplied else None
@@ -163,8 +180,6 @@ def _validated_plan(candidate, question):
         cve_id = fallback['cve_id']
         if not cve_id:
             tool = 'help'
-    if tool == 'compare_cves' and len(supplied) < 2:
-        tool = fallback['tool']
 
     # Keep publication-year filters only when an explicit year was requested.
     year = fallback['year'] if candidate.get('year') is not None else None
@@ -215,6 +230,10 @@ RANK_NOTE = ('Rank is the 2026 priority queue: CVEs published January to Septemb
 EXPLOIT_SOURCES = (('exploitdb', 'Exploit-DB'), ('metasploit', 'Metasploit'), ('nuclei', 'Nuclei'), ('poc_github', 'GitHub PoC'))
 
 
+SIGNAL_ORDER = ('Priority rank', 'Public exploit code', 'EPSS', 'Snapshot month', 'On the KEV list',
+                'Vendor history', 'CVSS 3 score', 'Description')
+
+
 def _known(value):
     return value is not None and not pd.isna(value)
 
@@ -246,12 +265,14 @@ def _signals_frame(s):
         rows.append(('Vendor history', '; '.join(history)))
     if _known(s.get('cvss3_score')):
         rows.append(('CVSS 3 score', f"{s['cvss3_score']} (not used for the rank)"))
-    rows.append(('Description', str(s.get('description') or '')))
+    rows.append(('Description', str(s['description']) if _known(s.get('description')) else ''))
     return pd.DataFrame(rows, columns=['signal', 'value'])
 
 
 def _fix_first(a, b):
     a_kev, b_kev = _known(a.get('kev_date')), _known(b.get('kev_date'))
+    if a_kev and b_kev:
+        return 'Both: they are already confirmed exploited (on the KEV list)'
     if a_kev != b_kev:
         return f"{(a if a_kev else b)['cve_id']}: it is already confirmed exploited (on the KEV list)"
     a_rank, b_rank = a.get('priority_rank'), b.get('priority_rank')
@@ -289,10 +310,11 @@ def execute_plan(store, plan, question=''):
         va = dict(_signals_frame(found[a]).values.tolist())
         vb = dict(_signals_frame(found[b]).values.tolist())
         # The two CVEs can have different signals, so line them up by name.
-        names = list(va) + [n for n in vb if n not in va]
+        names = [n for n in SIGNAL_ORDER if n in va or n in vb]
         frame = pd.DataFrame({'signal': names, a: [va.get(n, '') for n in names], b: [vb.get(n, '') for n in names]})
         frame.loc[len(frame)] = ['Fix first', _fix_first(found[a], found[b]), '']
-        return frame, RANK_NOTE
+        extra = ' Only the first two CVEs in the question are compared.' if len(set(c.upper() for c in CVE_RE.findall(question))) > 2 else ''
+        return frame, RANK_NOTE + extra
     if tool == 'top_vendors':
         return store.top_vendors(year, limit), 'Distinct affected CVEs per vendor' + (f' published in {year}.' if year else '.')
     if tool == 'vendor_kev_rate':
@@ -321,10 +343,11 @@ def execute_plan(store, plan, question=''):
 
 
 def grounded_answer(question, frame, note, use_ai=False):
+    """Returns (answer, written_by_watsonx)."""
     if frame.empty:
         if 'Ask about' in note or note.startswith('Please') or note.endswith('not in the dataset.'):
-            return note
-        return note + ' No matching records were returned.'
+            return note, False
+        return note + ' No matching records were returned.', False
     first = frame.iloc[0].to_dict()
     first_text = ', '.join(f'{k}: {v}' for k, v in first.items())
     if use_ai and watsonx_enabled():
@@ -337,10 +360,15 @@ def grounded_answer(question, frame, note, use_ai=False):
                       'Only if the result row count is more than 15, say the answer uses the first 15 rows.')
             prompt = (f'Question: {question}\nData caveat: {note}\nResult row count: {len(frame)}\n'
                       f'First 15 rows (CSV):\n{sample}')
-            return model_chat(system, prompt, 350)
+            return model_chat(system, prompt, 350), True
         except Exception:
             log.exception('watsonx.ai explanation failed; using deterministic answer')
     if list(frame.columns[:1]) == ['signal']:
-        return note + '\n\n' + '\n'.join(f"{row.iloc[0]}: {' | '.join(str(x) for x in row.iloc[1:] if str(x))}"
-                                       for _, row in frame.iterrows())
-    return f'{note}\n\nLeading result: {first_text}. Returned {len(frame):,} row(s).'
+        labelled = len(frame.columns) > 2  # a comparison: say which CVE each value is for
+        lines = []
+        for _, row in frame.iterrows():
+            values = [f'{col}: {row[col]}' if labelled and row.iloc[0] != 'Fix first' else str(row[col])
+                      for col in frame.columns[1:] if str(row[col])]
+            lines.append(f"{row.iloc[0]}: {' | '.join(values)}")
+        return note + '\n\n' + '\n'.join(lines), False
+    return f'{note}\n\nLeading result: {first_text}. Returned {len(frame):,} row(s).', False

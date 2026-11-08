@@ -60,7 +60,7 @@ RANKED_CTE = """
 
 # Vendor names that are also everyday words, so they would match by accident.
 VENDOR_SUFFIXES = {"networks", "systems", "software", "technologies", "corporation", "inc", "group", "electric"}
-AMBIGUOUS_VENDORS = {"arm", "bea", "ca", "ge", "isc", "mi", "mit", "ni", "sco", "sgi", "sun", "ui"}
+AMBIGUOUS_VENDORS = {"arm", "bea", "ca", "ge", "isc", "mi", "mit", "ni", "sco", "sgi", "sun", "ui", "npm package"}
 
 
 class DataStore:
@@ -245,6 +245,8 @@ class DataStore:
         for name in names:
             if not name or name in AMBIGUOUS_VENDORS or not all(ch.isalnum() or ch in " _-." for ch in name):
                 continue
+            if " and " in name:  # e.g. "d-link and trendnet", a joint KEV entry
+                continue
             name = name.replace("_", " ").replace("-", " ")
             result.add(name)
             # People say "Palo Alto" for "Palo Alto Networks".
@@ -277,7 +279,8 @@ class DataStore:
                 FROM vulnerabilities v JOIN scoreboard s USING (cve_id)
                 WHERE regexp_matches(lower(v.description), ?)
             ), best AS (
-                SELECT cve_id, min(vendor) AS vendor, max(matched_on) AS matched_on
+                -- Prefer a product-list match, and keep its vendor with it.
+                SELECT cve_id, arg_max(vendor, matched_on) AS vendor, max(matched_on) AS matched_on
                 FROM hits GROUP BY cve_id
             )
             SELECT o.priority_rank, o.cve_id, b.vendor, o.epss,
@@ -319,16 +322,22 @@ class DataStore:
         # How often each of this CVE's vendors ended up on the KEV list before.
         signals["vendors"] = self.query("""
             WITH mine AS (
-                SELECT DISTINCT lower(trim(vendor)) AS vendor FROM affected_products
-                WHERE upper(cve_id) = upper(?) AND upper(trim(vulnerable)) = 'Y'
+                -- Put the vendor the description names first (Apache for Log4Shell, not
+                -- the products that bundle it), then the vendor with most product entries.
+                SELECT lower(trim(vendor)) AS vendor, COUNT(*) AS entries,
+                       list_contains(string_split_regex(lower(any_value(v.description)), '[^a-z0-9]+'),
+                                     lower(trim(vendor))) AS named
+                FROM affected_products p JOIN vulnerabilities v USING (cve_id)
+                WHERE upper(p.cve_id) = upper(?) AND upper(trim(p.vulnerable)) = 'Y'
+                GROUP BY 1
             ), theirs AS (
                 SELECT DISTINCT lower(trim(p.vendor)) AS vendor, p.cve_id
                 FROM affected_products p JOIN mine ON lower(trim(p.vendor)) = mine.vendor
                 WHERE upper(trim(p.vulnerable)) = 'Y'
             ), kev AS (SELECT DISTINCT cve_id FROM known_exploited)
             SELECT t.vendor, COUNT(*) AS cves, COUNT(k.cve_id) AS kev_cves
-            FROM theirs t LEFT JOIN kev k USING (cve_id)
-            GROUP BY t.vendor ORDER BY cves DESC LIMIT 3
+            FROM theirs t LEFT JOIN kev k USING (cve_id) JOIN mine m USING (vendor)
+            GROUP BY t.vendor, m.named, m.entries ORDER BY m.named DESC, m.entries DESC, cves DESC LIMIT 3
         """, [cve_id]).to_dict("records")
         signals["overall_kev_rate"] = float(self.query("""
             SELECT (SELECT COUNT(DISTINCT cve_id) FROM known_exploited)

@@ -166,14 +166,15 @@ def chat(request: ChatRequest, http_request: Request):
         use_ai = watsonx_enabled() and _take_ai_quota()
         plan, mode = classify(request.message, use_ai=use_ai)
         table, note = execute_plan(store, plan, request.message)
-        answer = grounded_answer(request.message, table, note, use_ai)
+        answer, wrote_with_ai = grounded_answer(request.message, table, note, use_ai)
 
         # Convert pandas values to JSON-safe types (NaN -> null) and return
         # actual records rather than a JSON string embedded inside JSON.
         rows = json.loads(table.to_json(orient="records", date_format="iso"))
         return {
             "answer": answer,
-            "mode": mode,
+            # Label the answer by who wrote its text, which is what the page shows.
+            "mode": "IBM watsonx.ai" if wrote_with_ai else "Local intent router",
             "operation": plan["tool"],
             "note": note,
             "rows": rows,
