@@ -1,0 +1,7 @@
+check,passed,detail
+No banned or 'is blank' columns are model inputs,True,banned found: none; blank flags: none
+Training rows and labels all end before validation starts,True,"train published to 2024-09-30, labels to 2024-12-31; validation starts 2025-01-01"
+No CVE appears in more than one set,True,shared IDs: 0
+No row was already on KEV at its snapshot,True,rows on KEV by month end: 0
+"3,000 fake KEV entries dated 2030 change no feature",True,changed: none
+No single feature has AUC above 0.9 on its own,True,highest: log_assigner_kev_rate = 0.875

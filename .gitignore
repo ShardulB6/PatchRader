@@ -57,3 +57,8 @@ coverage
 .cache
 tmp
 temp
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
