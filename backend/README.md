@@ -1,92 +1,40 @@
-# PatchRadar — IBM Granite CVE Analyst
+# Vulture AI backend (CSV-backed development edition)
 
-A runnable Streamlit web app for the **Before the Breach** challenge. Includes a transparent vulnerability priority queue, conversational dataset analytics backed by DuckDB, CVE investigator, and an optional IBM Granite/watsonx AI layer.
+This directory contains the constrained CVE assistant. Granite selects from a
+fixed set of queries; database SQL is predefined in `db.py`. `app.py` (Streamlit)
+is not used by the website.
 
-## Quick start (Windows PowerShell)
+## Requirements
+- Python 3.10+
+- Four competition CSVs in `backend/data/`: `vulnerabilities.csv`,
+  `affected_products.csv`, `known_exploited.csv`, `scoreboard_2026.csv`
 
-Put the supplied CSVs inside `data/` beside `app.py`:
+## Local setup
 
-```
-patchradar_app/
-  app.py
-  analyst.py
-  db.py
-  semantic.py
-  data/
-    vulnerabilities.csv
-    affected_products.csv
-    known_exploited.csv
-    scoreboard_2026.csv
-    weakness_types.csv
-    references.csv
-    exploit_signals_2024.csv
-    exploit_signals_2025.csv
-```
+From `backend/`:
 
-From the project folder:
-
-```powershell
+```bash
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+# Linux/macOS: source .venv/bin/activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-python -m streamlit run app.py
+cp .env.example .env # Windows PowerShell: Copy-Item .env.example .env
+python -m uvicorn api:app --reload --port 8000
 ```
 
-Open the local URL Streamlit displays, usually http://localhost:8501.
+If using Granite, install `requirements-ai.txt` and add your IBM credentials
+in `backend/.env`; do not commit them. `GET /health` checks liveness;
+`GET /ready` triggers dataset load and checks data readiness;
+`POST /api/chat` accepts `{ "message": "Which vendor had the most vulnerabilities in 2025?" }`.
 
-### Optional IBM watsonx Granite chatbot
+## Integration and production blockers
 
-The app works **without credentials** using a deterministic, constrained intent router. For Granite-driven question routing and narrative answers:
-
-```powershell
-python -m pip install -r requirements-ai.txt
-Copy-Item .env.example .env
-```
-
-Edit `.env` (never commit it):
-
-```
-WATSONX_API_KEY=your_api_key
-WATSONX_PROJECT_ID=your_project_id
-WATSONX_URL=https://us-south.ml.cloud.ibm.com
-WATSONX_MODEL_ID=ibm/granite-4-h-small
-```
-
-Restart Streamlit and enable **IBM watsonx Granite chatbot** in the sidebar. The model's availability depends on your IBM account and region. The model is *not* given arbitrary SQL execution; it selects from predefined query operations, with server-side validation of parameters.
-
-### Optional IBM Granite similarity search
-
-Install `requirements-ai.txt`, open **CVE Investigator**, enter a CVE ID, then click **Find similar CVEs using Granite embeddings**. This loads `ibm-granite/granite-embedding-30m-english` from Hugging Face and compares against historical KEV and a sample of top 2026 candidates. It is deliberately CPU-friendly, not a whole-dataset vector index.
-
-## Features
-
-- **Overview:** CVE metrics, publication-year trends, and highest-ranked scoreboard vulnerabilities.
-- **Ask the Data:** natural-language questions about vendor counts, KEV rates, CWE types, per-year trends, CVE details, EPSS signal history, and the 2026 priority queue. All computed via DuckDB.
-- **Priority Queue:** transparent exploit-presence-first, EPSS-second ranking; export competition-format top-500 list.
-- **CVE Investigator:** description, CVSS, current affected products, available historical signals, and optional Granite similarities.
-- **Dataset Explorer:** schema and explicit caveats about late NIST updates.
-
-## Query examples
-
-- Which vendor had the most vulnerabilities in 2025?
-- Which vendors have the highest KEV listing rates?
-- Show the 20 highest-priority CVEs with exploit code.
-- What are the most common CWE weakness types?
-- How many CVEs were published each year?
-- What is CVE-2024-3400?
-- Show the monthly history of CVE-2024-3400.
-
-In **local mode**, questions outside the supported patterns show help rather than inventing an answer. **Granite mode** routes queries to the same fixed analytics operations and can phrase the numerical results in natural language.
-
-## Evaluation and limitations
-
-- The prioritization algorithm is a **reproduction of exploit-first → EPSS**, not a claimed improvement over IBM's official 8/500 benchmark.
-- KEV is incomplete as a global exploitation ground truth; provided KEV stops in December 2025.
-- NIST current records contain temporal leakage; interpret present-day descriptions and CVSS accordingly.
-- The semantic retrieval tool is exploratory and similarity is not evidence that a CVE has been or will be exploited.
-- The local mode intentionally doesn't translate arbitrary freeform questions into SQL. Granite mode is constrained for security and factual reliability.
-- No real IBM API calls are possible until you supply valid credentials.
-
-## Data privacy
-
-All CSV analytics run locally. If IBM watsonx is enabled, the **question and a limited subset of the query result** are sent to IBM for explanation. In Granite similarity mode, descriptions are passed to a locally running embedding model (it downloads model weights on initial run).
+- This data layer is still local-CSV-based and is not ready for the deployed
+  Vultr server unless those CSVs are provisioned. Prefer migrating to Tiger
+  Cloud after inspecting all table schemas and coverage.
+- Put FastAPI behind a private reverse proxy as `/api/*` on the web origin.
+- Add authentication / authorization and rate limits before exposing publicly.
+- Verify the IBM model ID is actually available in the watsonx project.
+- Remove `app.py` from the product after confirming the web dashboard has its
+  required functionality; do not delete it if still used for offline QA.
+- Name/branding is intentionally not changed in the existing website.
