@@ -14,6 +14,7 @@ import {
   data,
   exactInterval,
 } from "./charts";
+import { KeyTerms } from "./key-terms";
 import {
   EpssSpark,
   HAYSTACK,
@@ -282,6 +283,8 @@ export function StoryPage() {
           is FIRST's daily estimate of the chance a CVE is exploited in the next 30 days.
         </p>
       </header>
+
+      <KeyTerms />
 
       <Beat
         step={1}
