@@ -20,7 +20,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
-from analyst import classify, execute_plan, grounded_answer, watsonx_enabled
+from analyst import classify, execute_plan, grounded_answer, set_vendor_names, watsonx_enabled
 from db import DataStore
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -117,7 +117,9 @@ def _take_ai_quota() -> bool:
 def _cached_store():
     configured = Path(os.getenv("PATCHRADAR_DATA_DIR", "../data")).expanduser()
     data_dir = configured if configured.is_absolute() else BASE_DIR / configured
-    return DataStore(data_dir)
+    store = DataStore(data_dir)
+    set_vendor_names(store.vendor_names())
+    return store
 
 
 def get_store():
@@ -163,7 +165,7 @@ def chat(request: ChatRequest, http_request: Request):
         store = get_store()
         use_ai = watsonx_enabled() and _take_ai_quota()
         plan, mode = classify(request.message, use_ai=use_ai)
-        table, note = execute_plan(store, plan)
+        table, note = execute_plan(store, plan, request.message)
         answer = grounded_answer(request.message, table, note, use_ai)
 
         # Convert pandas values to JSON-safe types (NaN -> null) and return
