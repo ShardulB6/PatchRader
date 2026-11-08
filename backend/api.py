@@ -20,7 +20,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
-from analyst import classify, execute_plan, grounded_answer, watsonx_enabled
+from analyst import classify, execute_plan, grounded_answer, set_vendor_names, watsonx_enabled
 from db import DataStore
 from impact import top500_impact
 
@@ -114,32 +114,13 @@ def _take_ai_quota() -> bool:
         return True
 
 
-def _find_data_dir() -> Path:
-    """Use PATCHRADAR_DATA_DIR if it holds the CSVs, else look in common spots."""
-    candidates = []
-    configured = (os.getenv("PATCHRADAR_DATA_DIR") or "").strip()
-    if configured:
-        p = Path(configured).expanduser()
-        candidates.append(p if p.is_absolute() else BASE_DIR / p)
-    candidates += [
-        BASE_DIR / "../data",
-        BASE_DIR / "../data/data",  # fetch_data.py layout: <repo>/data/data/*.csv
-        BASE_DIR / "data",
-        BASE_DIR.parent / "data",
-    ]
-    for c in candidates:
-        if (c / "vulnerabilities.csv").is_file():
-            return c.resolve()
-    tried = "; ".join(str(c.resolve()) for c in candidates)
-    raise FileNotFoundError(
-        "Could not find vulnerabilities.csv. Put the dataset CSVs in "
-        f"{(BASE_DIR.parent / 'data').resolve()} or set PATCHRADAR_DATA_DIR. Tried: {tried}"
-    )
-
-
 @lru_cache(maxsize=1)
 def _cached_store():
-    return DataStore(_find_data_dir())
+    configured = Path(os.getenv("PATCHRADAR_DATA_DIR", "../data")).expanduser()
+    data_dir = configured if configured.is_absolute() else BASE_DIR / configured
+    store = DataStore(data_dir)
+    set_vendor_names(store.vendor_names())
+    return store
 
 
 def get_store():
@@ -186,12 +167,7 @@ def ready():
     except Exception:
         logger.exception("Readiness check failed")
         raise HTTPException(status_code=503, detail="Data service unavailable")
-    return {
-        "status": "ready",
-        "watsonx_configured": watsonx_enabled(),
-        "tables": store.tables,
-        "skipped_files": store.skipped,
-    }
+    return {"status": "ready", "watsonx_configured": watsonx_enabled()}
 
 
 @app.post("/api/chat")
@@ -202,18 +178,23 @@ def chat(request: ChatRequest, http_request: Request):
         store = get_store()
         use_ai = watsonx_enabled() and _take_ai_quota()
         plan, mode = classify(request.message, use_ai=use_ai)
-        table, note = execute_plan(store, plan)
-        answer = grounded_answer(request.message, table, note, use_ai)
+        cves = []
+        table, note = execute_plan(store, plan, request.message, cards=cves)
+        answer, summary, wrote_with_ai = grounded_answer(request.message, table, note, use_ai)
 
         # Convert pandas values to JSON-safe types (NaN -> null) and return
         # actual records rather than a JSON string embedded inside JSON.
         rows = json.loads(table.to_json(orient="records", date_format="iso"))
         return {
             "answer": answer,
-            "mode": mode,
+            # Label the answer by who wrote its text, which is what the page shows.
+            "mode": "IBM watsonx.ai" if wrote_with_ai else "Local intent router",
             "operation": plan["tool"],
             "note": note,
             "rows": rows,
+            # Optional extras the page draws as cards; it falls back to answer and rows.
+            "summary": summary,
+            "cves": cves,
         }
     except Exception:
         logger.exception("Chat request failed")

@@ -18,7 +18,6 @@ REQUIRED = (
 )
 OPTIONAL = (
     "weakness_types.csv",
-    "references.csv",
     "exploit_signals_2024.csv",
     "exploit_signals_2025.csv",
 )
@@ -29,14 +28,39 @@ DATASETS = {
     "known_exploited": "known_exploited.csv",
     "scoreboard": "scoreboard_2026.csv",
     "weakness_types": "weakness_types.csv",
-    # "references" is an SQL keyword, so the table gets a different name.
-    "cve_references": "references.csv",
     "signals_2024": "exploit_signals_2024.csv",
     "signals_2025": "exploit_signals_2025.csv",
 }
 
 MAX_RESULTS = 5000
 MAX_TOP_ITEMS = 30
+
+# The 2026 priority queue: public exploit code first, then EPSS. Shared by the
+# queries below so every answer uses the same ranks.
+RANKED_CTE = """
+    WITH scored AS (
+        SELECT cve_id, published, snapshot_month,
+               COALESCE(TRY_CAST(epss AS DOUBLE), 0) AS epss,
+               COALESCE(TRY_CAST(exploitdb AS INTEGER), 0) AS exploitdb,
+               COALESCE(TRY_CAST(metasploit AS INTEGER), 0) AS metasploit,
+               COALESCE(TRY_CAST(nuclei AS INTEGER), 0) AS nuclei,
+               COALESCE(TRY_CAST(poc_github AS INTEGER), 0) AS poc_github
+        FROM scoreboard
+    ), flagged AS (
+        SELECT *,
+            ((exploitdb + metasploit + nuclei + poc_github) > 0)::INT AS any_exploit
+        FROM scored
+    ), ordered AS (
+        SELECT *, ROW_NUMBER() OVER (
+            ORDER BY any_exploit DESC, epss DESC, cve_id ASC
+        ) AS priority_rank
+        FROM flagged
+    )
+"""
+
+# Vendor names that are also everyday words, so they would match by accident.
+VENDOR_SUFFIXES = {"networks", "systems", "software", "technologies", "corporation", "inc", "group", "electric"}
+AMBIGUOUS_VENDORS = {"arm", "bea", "ca", "ge", "isc", "mi", "mit", "ni", "sco", "sgi", "sun", "ui", "npm package"}
 
 
 class DataStore:
@@ -56,7 +80,6 @@ class DataStore:
         self.con.execute("SET temp_directory=?", [str(Path(tempfile.gettempdir()) / "duckdb")])
         self.con.execute("SET threads=4")
         self.tables = []
-        self.skipped = []
 
         try:
             for table, filename in DATASETS.items():
@@ -67,20 +90,14 @@ class DataStore:
                 # Force the CSV dialect instead of relying on auto-detection.
                 # Keeping strict parsing avoids silently dropping malformed rows.
                 # The filename is a trusted, locally configured path.
-                try:
-                    self.con.execute(
-                        f'CREATE TABLE "{table}" AS SELECT * FROM read_csv('
-                        "?, delim=',', quote='\"', escape='\"', "
-                        "header=true, all_varchar=true, "
-                        "strict_mode=true, ignore_errors=false)",
-                        [str(file_path)],
-                    )
-                    self.tables.append(table)
-                except duckdb.Error:
-                    if filename in REQUIRED:
-                        raise
-                    # A malformed optional dataset is skipped so the rest still works.
-                    self.skipped.append(filename)
+                self.con.execute(
+                    f'CREATE TABLE "{table}" AS SELECT * FROM read_csv('
+                    "?, delim=',', quote='\"', escape='\"', "
+                    "header=true, all_varchar=true, "
+                    "strict_mode=true, ignore_errors=false)",
+                    [str(file_path)],
+                )
+                self.tables.append(table)
         except Exception:
             self.con.close()
             raise
@@ -207,30 +224,126 @@ class DataStore:
         if exploit_only:
             filter_sql += " AND any_exploit = 1"
 
-        sql = f"""
-            WITH scored AS (
-                SELECT cve_id, published, snapshot_month,
-                       COALESCE(TRY_CAST(epss AS DOUBLE), 0) AS epss,
-                       COALESCE(TRY_CAST(exploitdb AS INTEGER), 0) AS exploitdb,
-                       COALESCE(TRY_CAST(metasploit AS INTEGER), 0) AS metasploit,
-                       COALESCE(TRY_CAST(nuclei AS INTEGER), 0) AS nuclei,
-                       COALESCE(TRY_CAST(poc_github AS INTEGER), 0) AS poc_github
-                FROM scoreboard
-            ), flagged AS (
-                SELECT *,
-                    ((exploitdb + metasploit + nuclei + poc_github) > 0)::INT AS any_exploit
-                FROM scored
-            ), ordered AS (
-                SELECT *, ROW_NUMBER() OVER (
-                    ORDER BY any_exploit DESC, epss DESC, cve_id ASC
-                ) AS priority_rank
-                FROM flagged
-            )
+        sql = RANKED_CTE + f"""
             SELECT * FROM ordered
             {filter_sql}
             ORDER BY priority_rank LIMIT {limit}
         """
         return self.query(sql, [min_epss])
+
+    def vendor_names(self):
+        """Vendor names a question can mention: the KEV list's vendors plus
+        product-list vendors with at least 100 CVEs, lowercased."""
+        names = self.query("""
+            SELECT lower(trim(vendor)) AS name FROM known_exploited
+            UNION
+            SELECT lower(trim(vendor)) FROM affected_products
+            WHERE upper(trim(vulnerable)) = 'Y'
+            GROUP BY 1 HAVING COUNT(DISTINCT cve_id) >= 100
+        """)["name"]
+        result = set()
+        for name in names:
+            if not name or name in AMBIGUOUS_VENDORS or not all(ch.isalnum() or ch in " _-." for ch in name):
+                continue
+            if " and " in name:  # e.g. "d-link and trendnet", a joint KEV entry
+                continue
+            name = name.replace("_", " ").replace("-", " ")
+            result.add(name)
+            # People say "Palo Alto" for "Palo Alto Networks".
+            words = name.split()
+            if len(words) > 2 and words[-1] in VENDOR_SUFFIXES:
+                result.add(" ".join(words[:-1]))
+        return result
+
+    def vendor_queue(self, vendors, limit=10):
+        """The 2026 priority queue limited to CVEs from the given vendors,
+        matched on the product list or, because NIST hasn't reviewed most 2026
+        CVEs yet, on the vendor's name in the description."""
+        limit = self._top_limit(limit)
+        names = sorted({v.lower() for v in vendors})
+        if not names:
+            return pd.DataFrame()
+        product_names = sorted({form for n in names for form in
+                                (n, n.replace(" ", ""), n.replace(" ", "_"), n.replace(" ", "-"))})
+        # Names only hold letters, digits, spaces, '_', '-' and '.', so escaping
+        # '.' is enough to make each one a literal.
+        pattern = r"\b(" + "|".join(n.replace(".", r"\.").replace(" ", "[ _-]?") for n in names) + r")\b"
+        sql = RANKED_CTE + f"""
+            , hits AS (
+                SELECT p.cve_id, lower(trim(p.vendor)) AS vendor, 'product list' AS matched_on
+                FROM affected_products p JOIN scoreboard s USING (cve_id)
+                WHERE upper(trim(p.vulnerable)) = 'Y'
+                  AND list_contains(?::VARCHAR[], lower(trim(p.vendor)))
+                UNION ALL
+                SELECT v.cve_id, regexp_extract(lower(v.description), ?, 1), 'description'
+                FROM vulnerabilities v JOIN scoreboard s USING (cve_id)
+                WHERE regexp_matches(lower(v.description), ?)
+            ), best AS (
+                -- Prefer a product-list match, and keep its vendor with it.
+                SELECT cve_id, arg_max(vendor, matched_on) AS vendor, max(matched_on) AS matched_on
+                FROM hits GROUP BY cve_id
+            )
+            SELECT o.priority_rank, o.cve_id, b.vendor, o.epss,
+                   o.exploitdb, o.metasploit, o.nuclei, o.poc_github,
+                   o.snapshot_month, b.matched_on,
+                   CASE WHEN length(v.description) > 160 THEN left(v.description, 159) || '…'
+                        ELSE v.description END AS description
+            FROM ordered o
+            JOIN best b USING (cve_id)
+            LEFT JOIN vulnerabilities v USING (cve_id)
+            ORDER BY o.priority_rank
+            LIMIT {limit}
+        """
+        return self.query(sql, [product_names, pattern, pattern])
+
+    def cve_signals(self, cve_id):
+        """Everything behind one CVE's place in the 2026 priority queue, as a dict."""
+        row = self.query(RANKED_CTE + """
+            , pct AS (
+                SELECT cve_id, percent_rank() OVER (ORDER BY epss) AS epss_pct FROM ordered
+            )
+            SELECT v.cve_id, v.published, v.cvss3_score,
+                   CASE WHEN length(v.description) > 200 THEN left(v.description, 199) || '…'
+                        ELSE v.description END AS description,
+                   o.priority_rank, o.snapshot_month, o.epss, p.epss_pct,
+                   o.exploitdb, o.metasploit, o.nuclei, o.poc_github,
+                   (SELECT COUNT(*) FROM scoreboard) AS ranked_total,
+                   (SELECT min(date_added) FROM known_exploited k
+                    WHERE upper(k.cve_id) = upper(v.cve_id)) AS kev_date
+            FROM vulnerabilities v
+            LEFT JOIN ordered o USING (cve_id)
+            LEFT JOIN pct p USING (cve_id)
+            WHERE upper(v.cve_id) = upper(?)
+            LIMIT 1
+        """, [cve_id])
+        if row.empty:
+            return None
+        signals = row.iloc[0].to_dict()
+        # How often each of this CVE's vendors ended up on the KEV list before.
+        signals["vendors"] = self.query("""
+            WITH mine AS (
+                -- Put the vendor the description names first (Apache for Log4Shell, not
+                -- the products that bundle it), then the vendor with most product entries.
+                SELECT lower(trim(vendor)) AS vendor, COUNT(*) AS entries,
+                       list_contains(string_split_regex(lower(any_value(v.description)), '[^a-z0-9]+'),
+                                     lower(trim(vendor))) AS named
+                FROM affected_products p JOIN vulnerabilities v USING (cve_id)
+                WHERE upper(p.cve_id) = upper(?) AND upper(trim(p.vulnerable)) = 'Y'
+                GROUP BY 1
+            ), theirs AS (
+                SELECT DISTINCT lower(trim(p.vendor)) AS vendor, p.cve_id
+                FROM affected_products p JOIN mine ON lower(trim(p.vendor)) = mine.vendor
+                WHERE upper(trim(p.vulnerable)) = 'Y'
+            ), kev AS (SELECT DISTINCT cve_id FROM known_exploited)
+            SELECT t.vendor, COUNT(*) AS cves, COUNT(k.cve_id) AS kev_cves
+            FROM theirs t LEFT JOIN kev k USING (cve_id) JOIN mine m USING (vendor)
+            GROUP BY t.vendor, m.named, m.entries ORDER BY m.named DESC, m.entries DESC, cves DESC LIMIT 3
+        """, [cve_id]).to_dict("records")
+        signals["overall_kev_rate"] = float(self.query("""
+            SELECT (SELECT COUNT(DISTINCT cve_id) FROM known_exploited)
+                   / (SELECT COUNT(*) FROM vulnerabilities) AS rate
+        """)["rate"].iloc[0])
+        return signals
 
     def cve(self, cve_id):
         return self.query("""
