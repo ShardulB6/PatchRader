@@ -129,10 +129,10 @@ def get_store():
 
 
 def _top500_path() -> Path:
-    """top500.csv in the project root, or TOP500_PATH if set."""
+    """outputs/top500.csv, or TOP500_PATH if set."""
     configured = (os.getenv("TOP500_PATH") or "").strip()
     if not configured:
-        return BASE_DIR.parent / "top500.csv"
+        return BASE_DIR.parent / "outputs" / "top500.csv"
     p = Path(configured).expanduser()
     return p if p.is_absolute() else BASE_DIR.parent / p
 
@@ -203,19 +203,22 @@ def chat(request: ChatRequest, http_request: Request):
 
 @app.get("/api/impact/top500")
 def impact_top500(http_request: Request):
-    """Impact profiles for top500.csv in the project root, if it exists."""
-    if not _allow_request(_client_ip(http_request)):
-        raise HTTPException(status_code=429, detail="Too many requests; wait a minute")
+    """Impact profiles for the submitted ranking in outputs/top500.csv."""
     path = _top500_path()
     if not path.is_file():
-        raise HTTPException(status_code=404, detail="top500.csv not found in the project root")
-    try:
-        key = path.stat().st_mtime_ns
-        if _top500_cache.get("key") != key:
-            _top500_cache.update(key=key, data=top500_impact(get_store(), path))
+        raise HTTPException(status_code=404, detail="top500.csv not found")
+    key = path.stat().st_mtime_ns
+    if _top500_cache.get("key") == key:
         return _top500_cache["data"]
+    # Only a cache miss does any work, so reloading the page can't use up the chat limit.
+    if not _allow_request(_client_ip(http_request)):
+        raise HTTPException(status_code=429, detail="Too many requests; wait a minute")
+    try:
+        data = top500_impact(get_store(), path)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception:
         logger.exception("Top 500 impact failed")
         raise HTTPException(status_code=500, detail="Impact analysis failed")
+    _top500_cache.update(key=key, data=data)
+    return data

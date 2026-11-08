@@ -3,7 +3,15 @@ import { getTop500Impact, type Top500Impact } from "../../../lib/ai-client";
 
 const pretty = (s: string) => s.replace(/_/g, " ");
 
-function Bars({ title, items, total }: { title: string; items: { label: string; count: number }[]; total: number }) {
+function Bars({
+  title,
+  items,
+  total,
+}: {
+  title: string;
+  items: { label: string; count: number }[];
+  total: number;
+}) {
   if (items.length === 0) return null;
   return (
     <div>
@@ -17,7 +25,7 @@ function Bars({ title, items, total }: { title: string; items: { label: string; 
             </div>
             <div className="h-1.5 rounded bg-muted">
               <div
-                className="h-1.5 rounded bg-sky-500"
+                className="h-1.5 rounded bg-primary"
                 style={{ width: `${Math.min(100, (item.count / Math.max(total, 1)) * 100)}%` }}
               />
             </div>
@@ -31,6 +39,7 @@ function Bars({ title, items, total }: { title: string; items: { label: string; 
 export default function Top500Auto() {
   const [data, setData] = useState<Top500Impact | null>(null);
   const [status, setStatus] = useState<"loading" | "missing" | "error" | "ready">("loading");
+  const [errorMessage, setErrorMessage] = useState("");
   const [harm, setHarm] = useState("all");
   const [open, setOpen] = useState<string | null>(null);
   const [shown, setShown] = useState(25);
@@ -41,7 +50,10 @@ export default function Top500Auto() {
         setData(result);
         setStatus(result ? "ready" : "missing");
       })
-      .catch(() => setStatus("error"));
+      .catch((error: unknown) => {
+        setErrorMessage(error instanceof Error ? error.message : "");
+        setStatus("error");
+      });
   }, []);
 
   const rows = useMemo(
@@ -59,15 +71,15 @@ export default function Top500Auto() {
   if (status === "missing") {
     return (
       <p className="text-xs text-muted-foreground">
-        Tip: put a top500.csv (one <code>cve_id</code> column) in the project root to see an automatic impact
-        analysis here.
+        No ranking file was found at <code>outputs/top500.csv</code>, so there is nothing to analyze
+        yet.
       </p>
     );
   }
   if (status === "error" || !data) {
     return (
-      <p role="alert" className="text-sm text-red-500">
-        Could not analyze top500.csv. Check that the API is running and look at its logs.
+      <p role="alert" className="text-sm text-destructive">
+        Could not analyze top500.csv. {errorMessage}
       </p>
     );
   }
@@ -156,19 +168,27 @@ export default function Top500Auto() {
                     <td className="border-b px-2 py-1">{r.exploit_ease}</td>
                     <td className="border-b px-2 py-1">{r.footprint}</td>
                     <td className="border-b px-2 py-1">{r.in_kev ? "Yes" : "No"}</td>
-                    <td className="border-b px-2 py-1">{r.harm_categories.map(pretty).join(", ") || "—"}</td>
+                    <td className="border-b px-2 py-1">
+                      {r.harm_categories.map(pretty).join(", ") || "—"}
+                    </td>
                   </tr>
                   {open === r.cve_id && (
                     <tr>
                       <td colSpan={6} className="border-b bg-muted/30 px-3 py-2">
                         <p>{r.narrative}</p>
                         {r.weaknesses.length > 0 && (
-                          <p className="mt-1 text-muted-foreground">Weaknesses: {r.weaknesses.join("; ")}</p>
+                          <p className="mt-1 text-muted-foreground">
+                            Weaknesses: {r.weaknesses.join("; ")}
+                          </p>
                         )}
                         {r.vendors.length > 0 && (
-                          <p className="mt-1 text-muted-foreground">Vendors: {r.vendors.join(", ")}</p>
+                          <p className="mt-1 text-muted-foreground">
+                            Vendors: {r.vendors.join(", ")}
+                          </p>
                         )}
-                        {r.description && <p className="mt-1 text-muted-foreground">{r.description}</p>}
+                        {r.description && (
+                          <p className="mt-1 text-muted-foreground">{r.description}</p>
+                        )}
                       </td>
                     </tr>
                   )}
@@ -190,9 +210,9 @@ export default function Top500Auto() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Qualitative indicators derived from CVSS fields, weakness types, descriptions, product lists and references.
-        Footprint counts affected products, not customers, and the sector and consequence mappings are heuristics, not
-        confirmed damage.
+        Qualitative indicators derived from CVSS fields, weakness types, descriptions, product lists
+        and references. Footprint counts affected products, not customers, and the sector and
+        consequence mappings are heuristics, not confirmed damage.
       </p>
     </section>
   );

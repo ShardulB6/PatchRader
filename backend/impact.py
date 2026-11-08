@@ -17,6 +17,8 @@ HARM_DICT = [
     ("command injection", "system_takeover", "attackers can run their own commands on the system"),
     ("code injection", "system_takeover", "attackers can run their own code on the system"),
     ("buffer", "system_takeover", "memory corruption that often leads to crashes or full control"),
+    ("out-of-bounds write", "system_takeover", "memory corruption that often leads to crashes or full control"),
+    ("out-of-bounds read", "data_exposure", "memory contents can leak to an attacker"),
     ("use after free", "system_takeover", "memory corruption that often leads to crashes or full control"),
     ("deserialization", "system_takeover", "crafted data can trigger code execution"),
     ("authentication", "unauthorized_access", "services can be accessed without legitimate credentials"),
@@ -25,10 +27,12 @@ HARM_DICT = [
     ("cross-site scripting", "user_compromise", "visitors can be attacked through a trusted site"),
     ("cookie", "session_hijack", "user sessions may be stolen or tampered with"),
     ("path traversal", "data_breach", "files outside the intended folder can be read or overwritten"),
-    ("resource", "service_disruption", "services can be exhausted and made unavailable"),
+    ("resource consumption", "service_disruption", "services can be exhausted and made unavailable"),
+    ("allocation of resources", "service_disruption", "services can be exhausted and made unavailable"),
     ("infinite loop", "service_disruption", "services can be hung or made unavailable"),
     ("cryptograph", "data_exposure", "protected data may be readable or forgeable"),
     ("information exposure", "data_exposure", "sensitive information leaks to unintended parties"),
+    ("exposure of sensitive", "data_exposure", "sensitive information leaks to unintended parties"),
 ]
 
 # Description regex -> (harm category, effect). Many new CVEs have no CWE yet.
@@ -155,7 +159,9 @@ def build_impact(store, cve_ids):
     prods = {r["cve_id"]: r for r in prod_df.to_dict("records")}
 
     refs = {}
-    if "cve_references" in store.tables:
+    refs_file = store.path / "references.csv"
+    if refs_file.is_file():
+        # Read on demand: the API has little memory to spare for every reference URL.
         ref_df = store.query("""
             SELECT upper(cve_id) AS cve_id, COUNT(*) AS n_refs,
                    COUNT(*) FILTER (WHERE lower(coalesce(domain,'')) LIKE '%github.com%'
@@ -163,8 +169,10 @@ def build_impact(store, cve_ids):
                        OR lower(coalesce(domain,'')) LIKE '%packetstormsecurity%'
                        OR lower(coalesce(domain,'')) LIKE '%seclists.org%') AS n_exploit_refs,
                    list(DISTINCT domain) AS domains
-            FROM cve_references WHERE list_contains(?::VARCHAR[], upper(cve_id)) GROUP BY 1
-        """, [ids])
+            FROM read_csv(?, delim=',', quote='"', escape='"', header=true, all_varchar=true,
+                          strict_mode=true, ignore_errors=false)
+            WHERE list_contains(?::VARCHAR[], upper(cve_id)) GROUP BY 1
+        """, [str(refs_file), ids])
         refs = {r["cve_id"]: r for r in ref_df.to_dict("records")}
 
     cwe_names = {}
@@ -274,7 +282,8 @@ def summarize(rows, requested):
                    if top_harm else "."))
     return {
         "headline": headline, "kev": kev, "easy": easy, "ransomware": ransom, "broad": broad,
-        "harm": _counts(harm), "severity": _counts(Counter(r["severity"] for r in rows)),
+        # Not capped: this list also fills the page's consequence filter.
+        "harm": _counts(harm, None), "severity": _counts(Counter(r["severity"] for r in rows)),
         "footprint": _counts(Counter(r["footprint"] for r in rows)),
         "vendors": _counts(Counter(v for r in rows for v in r["vendors"])),
         "contexts": _counts(Counter(c for r in rows for c in r["contexts"])),
