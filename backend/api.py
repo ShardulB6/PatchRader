@@ -165,8 +165,9 @@ def chat(request: ChatRequest, http_request: Request):
         store = get_store()
         use_ai = watsonx_enabled() and _take_ai_quota()
         plan, mode = classify(request.message, use_ai=use_ai)
-        table, note = execute_plan(store, plan, request.message)
-        answer, wrote_with_ai = grounded_answer(request.message, table, note, use_ai)
+        cves = []
+        table, note = execute_plan(store, plan, request.message, cards=cves)
+        answer, summary, wrote_with_ai = grounded_answer(request.message, table, note, use_ai)
 
         # Convert pandas values to JSON-safe types (NaN -> null) and return
         # actual records rather than a JSON string embedded inside JSON.
@@ -178,6 +179,9 @@ def chat(request: ChatRequest, http_request: Request):
             "operation": plan["tool"],
             "note": note,
             "rows": rows,
+            # Optional extras the page draws as cards; it falls back to answer and rows.
+            "summary": summary,
+            "cves": cves,
         }
     except Exception:
         logger.exception("Chat request failed")
