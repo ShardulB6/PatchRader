@@ -1,37 +1,37 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Button } from "@PatchRader/ui/components/button";
+import { useEffect, useMemo, useState } from "react";
 import { getTop500Impact, type Top500Impact } from "../../../lib/ai-client";
+import { DataTable, Verdict } from "../../ai/answer-cards/answer-view";
+import { count } from "../../ai/answer-cards/read";
+import { Bars } from "../../ai/answer-chart";
+import { ImpactList, pretty } from "./ImpactList";
 
-const pretty = (s: string) => s.replace(/_/g, " ");
+/** Weakness names end with their common name in quotes: "... ('Path Traversal')". */
+const weaknessName = (name: string) => name.match(/\('([^']+)'\)$/)?.[1] ?? name;
 
-function Bars({
+function Chart({
   title,
   items,
   total,
+  name = pretty,
+  className,
 }: {
   title: string;
   items: { label: string; count: number }[];
   total: number;
+  name?: (label: string) => string;
+  className?: string;
 }) {
   if (items.length === 0) return null;
+  const points = items.map((item) => ({
+    label: name(item.label),
+    value: item.count,
+    detail: `${pretty(item.label)}: ${count(item.count)} of ${count(total)} CVEs`,
+  }));
   return (
-    <div>
-      <h3 className="mb-2 text-sm font-semibold">{title}</h3>
-      <ul className="space-y-1.5">
-        {items.map((item) => (
-          <li key={item.label} className="text-xs">
-            <div className="flex justify-between gap-2">
-              <span>{pretty(item.label)}</span>
-              <span>{item.count}</span>
-            </div>
-            <div className="h-1.5 rounded bg-muted">
-              <div
-                className="h-1.5 rounded bg-primary"
-                style={{ width: `${Math.min(100, (item.count / Math.max(total, 1)) * 100)}%` }}
-              />
-            </div>
-          </li>
-        ))}
-      </ul>
+    <div className={className}>
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <Bars points={points} format={count} fitLabels />
     </div>
   );
 }
@@ -41,7 +41,6 @@ export default function Top500Auto() {
   const [status, setStatus] = useState<"loading" | "missing" | "error" | "ready">("loading");
   const [errorMessage, setErrorMessage] = useState("");
   const [harm, setHarm] = useState("all");
-  const [open, setOpen] = useState<string | null>(null);
   const [shown, setShown] = useState(25);
 
   useEffect(() => {
@@ -91,22 +90,35 @@ export default function Top500Auto() {
     ["Critical or high severity", s.critical_high],
     ["No product data yet", s.no_products],
   ];
+  const tableRows = rows.map((r) => ({
+    CVE: r.cve_id,
+    Severity: r.severity,
+    Score: r.score,
+    EPSS: r.epss,
+    Ease: r.exploit_ease,
+    Footprint: r.footprint,
+    "Exploit code": r.exploit_code ? "Yes" : "No",
+    Consequences: r.harm_categories.map(pretty).join(", "),
+  }));
 
   return (
-    <section className="space-y-4 rounded-xl border p-5" aria-labelledby="auto-heading">
-      <div>
+    <section
+      className="space-y-5 rounded-lg border bg-card p-4 text-sm"
+      aria-labelledby="auto-heading"
+    >
+      <div className="space-y-2">
         <h2 id="auto-heading" className="text-lg font-semibold">
           Automatic analysis of {data.source}
         </h2>
-        <p className="mt-1 text-sm">{s.headline}</p>
+        <Verdict headline={s.headline} />
         {data.missing.length > 0 && (
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {data.requested - data.matched} ID(s) were not found in vulnerabilities.csv, e.g.{" "}
             {data.missing.slice(0, 3).join(", ")}.
           </p>
         )}
         {s.kev === 0 && data.kev_through && (
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             The CISA KEV list in this dataset ends on {data.kev_through}, so it can't show whether
             these CVEs have been exploited since.
           </p>
@@ -115,106 +127,70 @@ export default function Top500Auto() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {tiles.map(([label, value]) => (
-          <div key={label} className="rounded-lg border p-3">
-            <p className="text-2xl font-bold">{value}</p>
+          <div key={label} className="rounded-md border p-3">
+            <p className="text-xl font-bold tabular-nums">{count(value)}</p>
             <p className="text-xs text-muted-foreground">{label}</p>
           </div>
         ))}
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
-        <Bars title="Potential consequences" items={s.harm} total={data.matched} />
-        <Bars title="Where affected products sit" items={s.contexts} total={data.matched} />
-        <Bars title="Most common weaknesses" items={s.weaknesses} total={data.matched} />
+      <div className="grid gap-x-8 gap-y-6 lg:grid-cols-2">
+        <Chart title="Potential consequences" items={s.harm} total={data.matched} />
+        <Chart
+          title="Most common weaknesses"
+          items={s.weaknesses}
+          total={data.matched}
+          name={weaknessName}
+        />
+        <Chart
+          title="Where affected products sit"
+          items={s.contexts}
+          total={data.matched}
+          className="lg:col-span-2"
+        />
       </div>
 
       <div>
-        <label className="text-xs">
-          Filter by consequence
-          <select
-            className="ml-2 rounded border bg-background px-2 py-1"
-            value={harm}
-            onChange={(e) => {
-              setHarm(e.target.value);
-              setShown(25);
-            }}
-          >
-            <option value="all">All</option>
-            {s.harm.map((h) => (
-              <option key={h.label} value={h.label}>
-                {pretty(h.label)} ({h.count})
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full border-collapse text-left text-xs">
-            <thead>
-              <tr>
-                {["CVE", "Severity", "Ease", "Footprint", "Exploit code", "Consequences"].map(
-                  (h) => (
-                    <th key={h} className="border-b px-2 py-1">
-                      {h}
-                    </th>
-                  ),
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, shown).map((r) => (
-                <Fragment key={r.cve_id}>
-                  <tr
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => setOpen(open === r.cve_id ? null : r.cve_id)}
-                  >
-                    <td className="border-b px-2 py-1 font-mono">{r.cve_id}</td>
-                    <td className="border-b px-2 py-1">
-                      {r.severity}
-                      {r.score != null ? ` (${r.score})` : ""}
-                    </td>
-                    <td className="border-b px-2 py-1">{r.exploit_ease}</td>
-                    <td className="border-b px-2 py-1">{r.footprint}</td>
-                    <td className="border-b px-2 py-1">{r.exploit_code ? "Yes" : "No"}</td>
-                    <td className="border-b px-2 py-1">
-                      {r.harm_categories.map(pretty).join(", ") || "—"}
-                    </td>
-                  </tr>
-                  {open === r.cve_id && (
-                    <tr>
-                      <td colSpan={6} className="border-b bg-muted/30 px-3 py-2">
-                        <p>{r.narrative}</p>
-                        {r.weaknesses.length > 0 && (
-                          <p className="mt-1 text-muted-foreground">
-                            Weaknesses: {r.weaknesses.join("; ")}
-                          </p>
-                        )}
-                        {r.vendors.length > 0 && (
-                          <p className="mt-1 text-muted-foreground">
-                            Vendors: {r.vendors.join(", ")}
-                          </p>
-                        )}
-                        {r.description && (
-                          <p className="mt-1 text-muted-foreground">{r.description}</p>
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="text-sm font-semibold">
+            {s.kev > 0
+              ? "CVEs, known exploited first, then highest EPSS"
+              : "CVEs, highest EPSS first"}
+          </h3>
+          <label className="text-xs">
+            Filter by consequence
+            <select
+              className="ml-2 rounded border bg-background px-2 py-1"
+              value={harm}
+              onChange={(e) => {
+                setHarm(e.target.value);
+                setShown(25);
+              }}
+            >
+              <option value="all">All</option>
+              {s.harm.map((h) => (
+                <option key={h.label} value={h.label}>
+                  {pretty(h.label)} ({h.count})
+                </option>
               ))}
-            </tbody>
-          </table>
+            </select>
+          </label>
         </div>
 
+        <ImpactList rows={rows.slice(0, shown)} />
+
         {shown < rows.length && (
-          <button
-            type="button"
-            className="mt-3 rounded border px-3 py-1 text-xs"
-            onClick={() => setShown((n) => n + 25)}
-          >
-            Show 25 more
-          </button>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <Button variant="outline" size="sm" onClick={() => setShown((n) => n + 25)}>
+              Show 25 more
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              {count(rows.length - shown)} more, all listed in the data table below.
+            </p>
+          </div>
         )}
+
+        <DataTable rows={tableRows} open={false} />
       </div>
 
       <p className="text-xs text-muted-foreground">

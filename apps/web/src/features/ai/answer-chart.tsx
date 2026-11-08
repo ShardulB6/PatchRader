@@ -3,7 +3,7 @@ import { useRef } from "react";
 import type { ChatRow } from "../../lib/ai-client";
 import { count, useChartTooltip, useElementWidth } from "../story/chart-kit";
 
-type Point = { label: string; value: number; detail: string };
+export type Point = { label: string; value: number; detail: string };
 type Spec = {
   label: (row: ChatRow) => string;
   value: string;
@@ -85,14 +85,27 @@ const ROW = 26;
 const BAR = 16;
 const LABEL = 132;
 const VALUE = 64;
+const CHAR = 6.6;
 
-function Bars({ points, format }: { points: Point[]; format: (value: number) => string }) {
+export function Bars({
+  points,
+  format,
+  fitLabels = false,
+}: {
+  points: Point[];
+  format: (value: number) => string;
+  /** Widen the label column for long names, up to just over half the chart. */
+  fitLabels?: boolean;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const width = useElementWidth(box);
   const { tooltip, markProps } = useChartTooltip(box);
   const height = points.length * ROW;
   const max = Math.max(...points.map((point) => point.value), 1);
-  const span = Math.max(0, width - LABEL - VALUE);
+  const longest = Math.max(...points.map((point) => point.label.length));
+  const labelWidth = fitLabels ? Math.min(longest * CHAR + 12, width * 0.55) : LABEL;
+  const labelChars = fitLabels ? Math.floor((labelWidth - 12) / CHAR) : undefined;
+  const span = Math.max(0, width - labelWidth - VALUE);
 
   return (
     <div ref={box} className={`relative mt-3 w-full ${COLOR}`} style={{ height }}>
@@ -111,14 +124,14 @@ function Bars({ points, format }: { points: Point[]; format: (value: number) => 
               <g key={`${point.label}-${index}`} {...markProps(point.detail, point.detail)}>
                 <rect x={0} y={y} width={width} height={ROW} fill="transparent" />
                 <text x={0} y={y + 17} className="fill-muted-foreground text-xs">
-                  {short(point.label)}
+                  {short(point.label, labelChars)}
                 </text>
                 <path
-                  d={barPath(LABEL, y + (ROW - BAR) / 2, barWidth, BAR)}
+                  d={barPath(labelWidth, y + (ROW - BAR) / 2, barWidth, BAR)}
                   className="fill-(--ai-bar)"
                 />
                 <text
-                  x={LABEL + barWidth + 6}
+                  x={labelWidth + barWidth + 6}
                   y={y + 17}
                   className="fill-foreground text-xs tabular-nums"
                 >
