@@ -1,7 +1,7 @@
 # Vultr deployment
 
 The dashboard runs on a Vultr Shared CPU server (`vc2-2c-4gb`, Toronto, Ubuntu 26.04 LTS) at
-https://155-138-145-151.sslip.io. [sslip.io](https://sslip.io) maps that name to the server's IP so it can have an HTTPS certificate before the project has its own domain.
+https://patchrader.health. The older address, https://155-138-145-151.sslip.io, still works: [sslip.io](https://sslip.io) maps that name to the server's IP.
 
 | File                 | Installed as                             | What it does                                                                                                    |
 | -------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -85,4 +85,4 @@ On a fresh Ubuntu server, as root:
 6. `systemctl reload caddy` so Caddy picks up the new `Caddyfile`, since installing it started Caddy with its default config.
 7. `ufw allow 80/tcp && ufw allow 443/tcp`
 
-When the GoDaddy domain is registered, point its A record at the server's IP, add the domain to the first line of `Caddyfile`, and run `systemctl reload caddy`.
+The domain is registered at Porkbun. If the new server has a different IP, update the `A` records for `patchrader.health` and `www` there as well.
