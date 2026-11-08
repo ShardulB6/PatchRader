@@ -148,7 +148,7 @@ function Summary({
   );
 }
 
-function Verdict({ headline }: { headline: string }) {
+export function Verdict({ headline }: { headline: string }) {
   return (
     <p
       className={`border-l-4 border-(--ai-blue) bg-muted/50 py-2 pr-2 pl-3 text-base font-semibold ${BLUE}`}
@@ -158,7 +158,7 @@ function Verdict({ headline }: { headline: string }) {
   );
 }
 
-function DataTable({ rows, open }: { rows: ChatRow[]; open: boolean }) {
+export function DataTable({ rows, open }: { rows: ChatRow[]; open: boolean }) {
   if (rows.length === 0) return null;
   return (
     // Long tables start collapsed so they don't push the conversation away.
