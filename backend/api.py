@@ -49,7 +49,7 @@ _store_lock = Lock()
 
 @lru_cache(maxsize=1)
 def _cached_store():
-    configured = Path(os.getenv("PATCHRADAR_DATA_DIR", "data")).expanduser()
+    configured = Path(os.getenv("PATCHRADAR_DATA_DIR", "../data")).expanduser()
     data_dir = configured if configured.is_absolute() else BASE_DIR / configured
     return DataStore(data_dir)
 

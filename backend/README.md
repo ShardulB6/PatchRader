@@ -1,4 +1,4 @@
-# Vulture AI backend (CSV-backed development edition)
+# PatchRader AI backend (CSV-backed development edition)
 
 This directory contains the constrained CVE assistant. A model on IBM watsonx.ai
 selects from a fixed set of queries; database SQL is predefined in `db.py`.

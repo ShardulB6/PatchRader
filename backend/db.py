@@ -16,7 +16,6 @@ REQUIRED = (
     "scoreboard_2026.csv",
 )
 OPTIONAL = (
-    "references.csv",
     "weakness_types.csv",
     "exploit_signals_2024.csv",
     "exploit_signals_2025.csv",
@@ -28,7 +27,6 @@ DATASETS = {
     "known_exploited": "known_exploited.csv",
     "scoreboard": "scoreboard_2026.csv",
     "weakness_types": "weakness_types.csv",
-    "references": "references.csv",
     "signals_2024": "exploit_signals_2024.csv",
     "signals_2025": "exploit_signals_2025.csv",
 }

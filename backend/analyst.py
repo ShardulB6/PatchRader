@@ -27,7 +27,7 @@ TOOLS = {
 CVE_RE = re.compile(r'\bCVE-\d{4}-\d{4,}\b', re.I)
 YEAR_RE = re.compile(r'\b(?:19|20)\d{2}\b')
 LIMIT_RE = re.compile(r'\b(?:top|first|highest|show|list)\s+(?:(?:me|the)\s+)*(\d{1,3})\b', re.I)
-SINGLE_RE = re.compile(r'\b(?:which|who|what)\s+(?:single\s+)?(?:vendor|company|manufacturer)\b|\b(?:the most|the highest|number one|#1|top vendor)\b', re.I)
+SINGLE_RE = re.compile(r'\b(?:which|who|what)\s+(?:single\s+)?(?:vendor|company|manufacturer)\b|\b(?:number one|#1|top vendor)\b', re.I)
 SYSTEM = '''You classify a user's CVE analytics question into ONE predefined operation.
 Return ONLY a JSON object with keys: tool, year, limit, cve_id, exploit_only, min_epss.
 Allowed tools: ''' + ', '.join(TOOLS) + '''.
@@ -146,7 +146,7 @@ def _validated_plan(candidate, question):
         'tool': tool, 'year': year,
         'limit': max(1, min(limit, 500 if tool == 'priority_queue' else 30)),
         'cve_id': cve_id,
-        'exploit_only': bool(candidate.get('exploit_only', False)),
+        'exploit_only': candidate.get('exploit_only') is True,
         'min_epss': epss,
     }
 

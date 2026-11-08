@@ -4,7 +4,8 @@ export default function Header() {
   const links = [
     { to: "/", label: "Home" },
     { to: "/story", label: "Story" },
-    { to: "/ai", label: "AI Analyst" },
+    // Hidden on the live site until the FastAPI backend is deployed behind Caddy.
+    ...(import.meta.env.DEV ? ([{ to: "/ai", label: "AI Analyst" }] as const) : []),
   ] as const;
 
   return (
