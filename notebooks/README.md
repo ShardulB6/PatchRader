@@ -22,8 +22,10 @@ The Granite notebooks download `ibm-granite` embedding models from Hugging Face 
 | `granite_neighbor_challenger.ipynb` | Tests whether being similar to already-exploited CVEs is a useful signal. It has no saved outputs. |
 | `source_evidence_bayesian_experiment.ipynb` | Learns separate weights for each exploit source (Exploit-DB, Metasploit, Nuclei, GitHub PoC) instead of treating any exploit code the same. |
 
-## Results so far
+## Results
 
-No model beats the baseline yet. In rolling 2025 Q1 to Q3 backtests (label: added to KEV within 90 days), "exploit code first, then EPSS" caught 11 exploited CVEs in total. Plain EPSS caught 8, Granite + XGBoost caught 6, and the Granite head alone caught 2. The 25% ML reranker tied the baseline at 11. Every notebook's selection rule chose the baseline, so `top500.csv` is the baseline ranking.
+**The submitted ranking doesn't come from the seven notebooks above.** It's `outputs/top500.csv`, a blend of logistic regression and LightGBM with a Granite text score, built by `python -m ml.final_model`. Trained on 2024 and tested on 2025, it found 19 of the 52 exploited CVEs in its top 243, against 14 for "exploit code first, then EPSS". That's a gain of 5 with a 90% range of -1 to +10, so it could still be luck. See [`ml/README.md`](../ml/README.md) for the full results and the later notebooks in this folder.
+
+The seven notebooks above didn't beat the baseline. In rolling 2025 Q1 to Q3 backtests (label: added to KEV within 90 days), "exploit code first, then EPSS" caught 11 exploited CVEs in total. Plain EPSS caught 8, Granite + XGBoost caught 6, and the Granite head alone caught 2. The 25% ML reranker tied the baseline at 11. Every one of their selection rules chose the baseline, so the `top500.csv` they write is the baseline ranking, not the submitted file.
 
 These numbers come from the saved notebook outputs and have not been rerun. The Granite notebooks also warn that current NVD descriptions may include text written after the snapshot date, which can leak future information into the embeddings. Treat the Granite results as exploratory.
