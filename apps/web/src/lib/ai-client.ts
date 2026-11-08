@@ -23,7 +23,9 @@ export async function askAnalyst(message: string): Promise<ChatResponse> {
     throw new Error(
       response.status === 503
         ? "AI service is temporarily unavailable."
-        : `Chat request failed (HTTP ${response.status}).`,
+        : response.status === 429
+          ? "Too many questions at once. Wait a minute and try again."
+          : `Chat request failed (HTTP ${response.status}).`,
     );
   }
   return (await response.json()) as ChatResponse;
