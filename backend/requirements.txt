@@ -1,0 +1,7 @@
+# Python 3.10+
+fastapi>=0.110,<1
+uvicorn>=0.27,<1
+pydantic>=2,<3
+python-dotenv>=1,<2
+duckdb>=1.1,<2
+pandas>=2,<3
