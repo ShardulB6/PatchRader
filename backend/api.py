@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from analyst import classify, execute_plan, grounded_answer, set_vendor_names, watsonx_enabled
 from db import DataStore
+from impact import top500_impact
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
@@ -127,6 +128,18 @@ def get_store():
         return _cached_store()
 
 
+def _top500_path() -> Path:
+    """outputs/top500.csv, or TOP500_PATH if set."""
+    configured = (os.getenv("TOP500_PATH") or "").strip()
+    if not configured:
+        return BASE_DIR.parent / "outputs" / "top500.csv"
+    p = Path(configured).expanduser()
+    return p if p.is_absolute() else BASE_DIR.parent / p
+
+
+_top500_cache = {}
+
+
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
 
@@ -186,3 +199,26 @@ def chat(request: ChatRequest, http_request: Request):
     except Exception:
         logger.exception("Chat request failed")
         raise HTTPException(status_code=500, detail="Chat request failed")
+
+
+@app.get("/api/impact/top500")
+def impact_top500(http_request: Request):
+    """Impact profiles for the submitted ranking in outputs/top500.csv."""
+    path = _top500_path()
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="top500.csv not found")
+    key = path.stat().st_mtime_ns
+    if _top500_cache.get("key") == key:
+        return _top500_cache["data"]
+    # Only a cache miss does any work, so reloading the page can't use up the chat limit.
+    if not _allow_request(_client_ip(http_request)):
+        raise HTTPException(status_code=429, detail="Too many requests; wait a minute")
+    try:
+        data = top500_impact(get_store(), path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        logger.exception("Top 500 impact failed")
+        raise HTTPException(status_code=500, detail="Impact analysis failed")
+    _top500_cache.update(key=key, data=data)
+    return data
