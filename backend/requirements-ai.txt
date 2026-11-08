@@ -1,4 +1,0 @@
--r requirements.txt
-ibm-watsonx-ai>=1.3
-# Install only when CVE semantic similarity is needed:
-sentence-transformers>=3.0
