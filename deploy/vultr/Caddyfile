@@ -1,7 +1,6 @@
-# sslip.io maps this name to the server's IP, so Caddy can get an HTTPS
-# certificate before the project has its own domain. When the domain is
-# registered, add it to the first line, e.g. "patchrader.xyz, 155-138-...".
-155-138-145-151.sslip.io {
+# The sslip.io name maps to the server's IP. It stays so that links shared
+# before the project had its own domain keep working.
+patchrader.health, 155-138-145-151.sslip.io {
 	encode zstd gzip
 	# The AI analyst API. Only /api/* is exposed; FastAPI's docs pages are not.
 	handle /api/* {
@@ -12,6 +11,10 @@
 	}
 }
 
+www.patchrader.health {
+	redir https://patchrader.health{uri}
+}
+
 http://155.138.145.151 {
-	redir https://155-138-145-151.sslip.io{uri}
+	redir https://patchrader.health{uri}
 }
