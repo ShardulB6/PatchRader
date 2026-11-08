@@ -1,0 +1,7 @@
+# Files the notebooks write when run
+*.csv
+*.npy
+*.npz
+outputs/
+neighbor_outputs/
+.ipynb_checkpoints/
