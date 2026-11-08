@@ -38,7 +38,7 @@ This creates `data/` (about 850 MB), which git ignores. Column details are in `d
 
 ## Database
 
-The dashboard reads from Postgres on Tiger Cloud. The `exploit_signals` table holds the monthly signals and the 2026 scoreboard values, with `source` telling them apart. The app builds and runs without a database until a page calls `getDb()`.
+The monthly signals are in Postgres on Tiger Cloud, but no dashboard page queries them yet. The `exploit_signals` table holds the monthly signals and the 2026 scoreboard values, with `source` telling them apart. The app builds and runs without a database until a page calls `getDb()`.
 
 To connect, put the connection string in `apps/web/.env.local`, which git ignores:
 
@@ -56,15 +56,15 @@ This script needs a Node version that runs TypeScript directly. It works on Node
 
 ## Sponsors
 
-Unless otherwise stated, PatchRader uses these sponsors:
+PatchRader used these hackathon sponsors:
 
-| Sponsor               | How we use it                                                      | Status                             |
-| --------------------- | ------------------------------------------------------------------ | ---------------------------------- |
-| DEV Writing Challenge | Turn the Devpost write-up into a post about what we found          | Write it near the end              |
-| GoDaddy Registry      | Register the project's domain                                      | Decide on "Rader" vs "Radar" first |
-| Vultr                 | Host the dashboard, and possibly vLLM if GPU credits are available | Dashboard live; see `deploy/vultr` |
-| Entire                | Host the repo there                                                | Not started                        |
-| Tiger Data            | Store the 6.4M monthly EPSS rows                                   | Loaded on Tiger Cloud              |
+| Sponsor          | How we used it                                                                                                                                        |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vultr            | Hosts the live dashboard and AI Analyst API at https://patchrader.health. See `deploy/vultr`                                                          |
+| Tiger Data       | Holds the monthly exploit signals, plus the Granite embeddings for the similar-known-exploit search in `notebooks/trackb_4_tiger_vector_search.ipynb` |
+| GoDaddy Registry | Runs the `.health` domain space for `patchrader.health`, which we registered through Porkbun                                                          |
+
+The live site does not query Tiger Data: its charts come from a prebuilt JSON file and the AI Analyst reads CSV files. We planned to host the repo on Entire and run vLLM on a Vultr GPU, but did neither.
 
 ## UI Customization
 

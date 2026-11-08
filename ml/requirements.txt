@@ -1,0 +1,20 @@
+# Versions the results were produced with (Python 3.9, macOS arm64).
+# Core: needed to reproduce outputs/top500.csv and the backtests.
+duckdb==1.4.5
+numpy==2.0.2
+pandas==2.3.3
+pyarrow==21.0.0
+scipy==1.13.1
+scikit-learn==1.6.1
+lightgbm==4.6.0
+# Notebooks and SHAP.
+matplotlib==3.9.4
+nbformat==5.10.4
+nbconvert==7.17.2
+ipykernel==6.29.5
+shap==0.46.0
+# Optional: only to re-train the Granite text models (ml/text_model.py, notebooks/trackb_*). Needs a GPU for practical run times.
+torch==2.8.0
+transformers==4.57.6
+sentence-transformers==5.1.2
+peft==0.17.1
