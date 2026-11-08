@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { count, percent } from "./chart-kit";
 import { EpssLine } from "./epss-line";
 import { HaystackField } from "./haystack-field";
+import { KeyTerms } from "./key-terms";
 import { LagColumns } from "./lag-columns";
 import { SeverityBars } from "./severity-bars";
 import story from "./story-data.json";
@@ -67,6 +68,8 @@ export function StoryPage() {
           list (KEV) as the record of confirmed attacks.
         </p>
       </header>
+
+      <KeyTerms />
 
       <Beat
         step={1}
